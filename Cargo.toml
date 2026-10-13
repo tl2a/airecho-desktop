@@ -5,5 +5,7 @@ edition = "2024"
 
 [dependencies]
 # Force both crates to share the exact same underlying glib/gio release versions
-gtk4 = { version = "0.11" }
-adw = { package = "libadwaita", version = "0.9", features = ["v1_4"] }
+gtk4 = { version = "0.11", features = ["gnome_50"] }
+adw = { package = "libadwaita", version = "0.9", features = ["v1_9"] }
+# Needed for resources_register_include! (embeds .gresource bytes at link time)
+gio = { version = "0.20" }

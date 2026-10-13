@@ -1,0 +1,104 @@
+using Gtk 4.0;
+using Adw 1;
+
+Adw.ApplicationWindow window {
+  title: _("Kopico Desktop");
+  default-width: 800;
+  default-height: 500;
+  width-request: 360;
+  height-request: 294;
+
+  Adw.Breakpoint {
+    condition ("max-width: 600sp")
+
+    setters {
+      split_view.collapsed: true;
+    }
+  }
+
+  content: Adw.OverlaySplitView split_view {
+    show-sidebar: true;
+
+    sidebar: Adw.ToolbarView {
+      [top]
+      Adw.HeaderBar {
+        title-widget: Adw.WindowTitle {
+          title: _("Kopico");
+        };
+      }
+
+      content: Gtk.ListBox sidebar_list {
+        selection-mode: single;
+
+        styles [
+          "navigation-sidebar",
+        ]
+
+        Gtk.ListBoxRow {
+          Gtk.Label {
+            label: _("Home");
+            xalign: 0;
+            margin-top: 6;
+            margin-bottom: 6;
+            margin-start: 6;
+          }
+        }
+
+        Gtk.ListBoxRow {
+          Gtk.Label {
+            label: _("Documents");
+            xalign: 0;
+            margin-top: 6;
+            margin-bottom: 6;
+            margin-start: 6;
+          }
+        }
+
+        Gtk.ListBoxRow {
+          Gtk.Label {
+            label: _("Settings");
+            xalign: 0;
+            margin-top: 6;
+            margin-bottom: 6;
+            margin-start: 6;
+          }
+        }
+      };
+    };
+
+    content: Adw.ToolbarView {
+      [top]
+      Adw.HeaderBar {
+        [start]
+        Gtk.ToggleButton sidebar_toggle {
+          icon-name: "sidebar-show-symbolic";
+          tooltip-text: _("Toggle Sidebar");
+          active: true;
+        }
+
+        title-widget: Adw.WindowTitle window_title {
+          title: _("Home");
+        };
+      }
+
+      content: Adw.ToastOverlay toast_overlay {
+        Adw.StatusPage status_page {
+          icon-name: "go-home-symbolic";
+          title: _("Home");
+          description: _("Pick a page from the sidebar, or press the button.");
+
+          Gtk.Button button {
+            label: _("Click me!");
+            halign: center;
+
+            styles [
+              "pill",
+              "suggested-action",
+            ]
+          }
+        }
+      };
+    };
+  };
+}
+
