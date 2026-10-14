@@ -12,3 +12,5 @@ adw = { package = "libadwaita", version = "0.9", features = ["v1_9"] }
 # in one process. `ksni` (D-Bus StatusNotifierItem) is used on Linux instead; the
 # feature has no effect on macOS/Windows.
 tray-icon = { version = "0.26.1", default-features = false, features = ["ksni"] }
+# Platform-aware home/download directory paths (used by the receiver module)
+dirs-next = "2"

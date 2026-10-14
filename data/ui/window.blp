@@ -112,6 +112,31 @@ Adw.ApplicationWindow window {
             title: _("Advanced");
 
             Adw.PreferencesGroup {
+              title: _("Receive");
+              description: _("Kopico polls croc in the background and receives files automatically.");
+
+              Adw.ComboRow relay_mode_row {
+                title: _("Relay Mode");
+                subtitle: _("Local: LAN only, polls every 3 s  ·  Public Relay: polls every 30 s");
+
+                model: Gtk.StringList {
+                  strings [_("Local (LAN)"), _("Public Relay")]
+                };
+              }
+
+              Adw.EntryRow receive_code_row {
+                title: _("Receive Code");
+                show-apply-button: true;
+              }
+
+              Adw.ActionRow {
+                title: _("Save To");
+                subtitle: _("~/Downloads/Kopico");
+                activatable: false;
+              }
+            }
+
+            Adw.PreferencesGroup {
               title: _("Background");
 
               Adw.SwitchRow tray_row {
