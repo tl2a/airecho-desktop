@@ -96,3 +96,9 @@ install_data(
   rename:      'kopico-desktop',
 )
 
+# ── Install .desktop file (required for gio::Notification on Linux) ───────────
+install_data(
+  'data/in.tl2a.kopico-desktop.desktop',
+  install_dir: datadir / 'applications',
+)
+

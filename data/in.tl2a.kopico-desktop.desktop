@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Kopico Desktop
+Comment=Kopico clipboard manager
+Exec=/home/arpan/Documents/Rust/kopico-desktop/target/debug/kopico-desktop
+Icon=dialog-information
+Type=Application
+Categories=Utility;
+StartupNotify=true
