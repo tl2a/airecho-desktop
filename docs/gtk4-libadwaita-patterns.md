@@ -19,6 +19,7 @@ Covers real patterns used in `src/main.rs` and `data/ui/*.blp`.
 10. [Dialogs & Overlays](#10-dialogs--overlays)
 11. [GObject Properties & Values](#11-gobject-properties--values)
 12. [Debugging Tips](#12-debugging-tips)
+13. [Background Apps & System Tray](#13-background-apps--system-tray)
 
 ---
 
@@ -219,6 +220,7 @@ window.connect_close_request(move |_win| {
     // glib::Propagation::Proceed  // allows close
 });
 ```
+To hide to the tray instead of closing, see [§13](#13-background-apps--system-tray).
 
 ### Clone Pattern for Multiple Captures
 ```rust
@@ -401,6 +403,9 @@ window.add_breakpoint(bp);
 | `success` | Green success colour |
 
 ### Loading a Custom CSS File
+**This project:** nothing to do — `AdwApplication` auto-loads `style.css` from the app's
+resource base path (`/in/tl2a/kopico-desktop/style.css`, source `data/style.css`).
+Manual loading is only needed for extra stylesheets:
 ```rust
 // In main(), after registering resources:
 let provider = gtk4::CssProvider::new();
@@ -530,5 +535,76 @@ G_MESSAGES_DEBUG=all cargo run
 ```bash
 pkg-config --modversion libadwaita-1
 ```
-Make sure the installed version matches the `v1_x` feature flag in `Cargo.toml`.
+The installed version must be **at least** the `v1_x` feature flag in `Cargo.toml`
+(e.g. `v1_9` needs libadwaita ≥ 1.9), otherwise the build fails.
+
+---
+
+## 13. Background Apps & System Tray
+
+Implemented in `src/tray.rs` + `setup_app()` in `src/main.rs`.
+
+### Keep Running With No Visible Window
+```rust
+// Hide instead of destroy — window state survives, app keeps running
+window.connect_close_request(|window| {
+    window.set_visible(false);
+    glib::Propagation::Stop
+});
+
+// In connect_startup: keep the process alive even with zero windows.
+// Dropping the guard (on shutdown) releases it.
+let hold_guard = app.hold();
+```
+
+### Reuse One Window on Activate
+```rust
+fn show_window(app: &Application) {
+    let window = app.windows().into_iter().next()
+        .unwrap_or_else(|| build_ui(app).upcast());
+    window.present();
+}
+app.connect_activate(show_window);
+```
+
+### Stateful Action (checkbox / toggle)
+```rust
+let action = gio::SimpleAction::new_stateful("enabled", None, &true.to_variant());
+action.connect_activate(|action, _| {
+    let on = !action.state().and_then(|s| s.get::<bool>()).unwrap_or(false);
+    action.set_state(&on.to_variant());
+});
+app.add_action(&action);   // usable as "app.enabled" from menus, buttons, Blueprint
+```
+
+### Tray Menu → App Actions (thread-safe)
+```rust
+MenuEvent::set_event_handler(Some(|event: MenuEvent| {
+    let action = event.id.0;                    // String — Send
+    glib::idle_add_once(move || {               // runs on the GTK main loop
+        if let Some(app) = gio::Application::default() {
+            app.activate_action(&action, None);
+        }
+    });
+}));
+```
+Never capture widgets in the handler: on Linux (ksni) it runs on a worker thread.
+
+### Making the Tray Optional
+Keep the tray behind a stateful action (`app.tray`) and hold it in
+`Rc<RefCell<Option<Tray>>>`: `Some(Tray::new(..))` to show, `None` to remove (this also
+drops the hold guard). The close handler must check the same state — hide only while the
+tray exists, otherwise return `Propagation::Proceed` so the app can exit.
+
+### Quitting for Real
+`app.quit()` stops the main loop → `connect_shutdown` fires → drop the `TrayIcon` and
+hold guard there → `app.run()` returns and the process exits. No background instance remains.
+
+### Platform Gotchas
+| Platform | Note |
+|---|---|
+| Linux | Use `tray-icon` with `default-features = false, features = ["ksni"]` — the default backend loads GTK 3 and crashes a GTK 4 process |
+| GNOME | Needs the *AppIndicator and KStatusNotifierItem Support* extension to show tray icons |
+| macOS | Create the tray on the main thread (startup). Template icons follow menu bar light/dark but are always monochrome — use `set_icon` (non-template) for a coloured state such as green = enabled |
+| macOS notifications | Not supported in this project — `gio::Notification` has no GLib macOS backend, so `notification.rs` is compiled for Linux only |
 

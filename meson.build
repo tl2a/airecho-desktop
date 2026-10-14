@@ -52,11 +52,12 @@ gresource_xml = data_dir / app_id + '.gresource.xml'
 
 compiled_gresource = custom_target(
   'gresource',
-  input:   [gresource_xml] + blp_to_ui,
+  input:   [gresource_xml, data_dir / 'style.css'] + blp_to_ui,
   output:  app_id + '.gresource',
   command: [
     glib_compile_resources,
     '--sourcedir', meson.current_build_dir() / 'data',
+    '--sourcedir', data_dir,   # hand-written resources (style.css)
     '--target', '@OUTPUT@',
     gresource_xml,
   ],

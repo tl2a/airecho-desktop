@@ -63,6 +63,14 @@ Do **not** mix `gtk4::Widget` and `adw::gtk::Widget` for the same type.
 ### New Dependency
 - [ ] Add to `[dependencies]` in `Cargo.toml`
 - [ ] If it's a system library, add a `dependency(…)` call in `meson.build`
+- [ ] Run `cargo tree --target all -i gtk` — it must find nothing. Any crate that pulls in
+      GTK 3 (`gtk 0.18`) crashes the GTK 4 app on Linux.
+- [ ] Don't add `gio`/`glib` crates directly — use `gtk4::gio` / `gtk4::glib`.
+
+### New Tray Menu Item
+- [ ] Register an `app.<name>` action in `setup_app()` (`src/main.rs`)
+- [ ] Add a menu item with id `"<name>"` in `Tray::new()` (`src/tray.rs`)
+- [ ] Nothing else — the `MenuEvent` handler already dispatches ids to `app.*` actions
 
 ---
 
@@ -70,7 +78,10 @@ Do **not** mix `gtk4::Widget` and `adw::gtk::Widget` for the same type.
 
 | File | Purpose | Edit? |
 |---|---|---|
-| `src/main.rs` | App entry + signal handlers | ✅ Yes |
+| `src/main.rs` | App entry, app actions, window + signal handlers | ✅ Yes |
+| `src/tray.rs` | System tray icon + menu → `app.*` actions | ✅ Yes |
+| `src/notification.rs` | System notifications — Linux only (`gio::Notification`) | ✅ Yes |
+| `data/style.css` | App CSS, auto-loaded by `AdwApplication` | ✅ Yes |
 | `data/ui/window.blp` | Window UI layout | ✅ Yes |
 | `data/*.gresource.xml` | GResource manifest | ✅ When adding `.ui` files |
 | `meson.build` | Meson build config | ✅ When adding `.blp` files |
@@ -88,6 +99,7 @@ Do **not** mix `gtk4::Widget` and `adw::gtk::Widget` for the same type.
 | Top-level window | `Adw.ApplicationWindow` |
 | Window with header bar | `Adw.ToolbarView` + `Adw.HeaderBar` |
 | Responsive sidebar layout | `Adw.OverlaySplitView` |
+| Top-level tabs | `Adw.ViewStack` + `Adw.ViewSwitcher` / `Adw.ViewSwitcherBar` |
 | Multi-page navigation | `Adw.NavigationView` / `Adw.NavigationPage` |
 | Empty / placeholder state | `Adw.StatusPage` |
 | In-app notifications | `Adw.ToastOverlay` + `Adw.Toast` |

@@ -3,102 +3,131 @@ using Adw 1;
 
 Adw.ApplicationWindow window {
   title: _("Kopico Desktop");
-  default-width: 800;
-  default-height: 500;
+  default-width: 640;
+  default-height: 560;
   width-request: 360;
   height-request: 294;
 
+  // Narrow windows: move the tabs from the header bar to a bottom bar (GNOME HIG)
   Adw.Breakpoint {
-    condition ("max-width: 600sp")
+    condition ("max-width: 550sp")
 
     setters {
-      split_view.collapsed: true;
+      switcher_bar.reveal: true;
+      view_switcher.visible: false;
     }
   }
 
-  content: Adw.OverlaySplitView split_view {
-    show-sidebar: true;
-
-    sidebar: Adw.ToolbarView {
-      [top]
-      Adw.HeaderBar {
-        title-widget: Adw.WindowTitle {
-          title: _("Kopico");
-        };
-      }
-
-      content: Gtk.ListBox sidebar_list {
-        selection-mode: single;
-
-        styles [
-          "navigation-sidebar",
-        ]
-
-        Gtk.ListBoxRow {
-          Gtk.Label {
-            label: _("Home");
-            xalign: 0;
-            margin-top: 6;
-            margin-bottom: 6;
-            margin-start: 6;
-          }
-        }
-
-        Gtk.ListBoxRow {
-          Gtk.Label {
-            label: _("Documents");
-            xalign: 0;
-            margin-top: 6;
-            margin-bottom: 6;
-            margin-start: 6;
-          }
-        }
-
-        Gtk.ListBoxRow {
-          Gtk.Label {
-            label: _("Settings");
-            xalign: 0;
-            margin-top: 6;
-            margin-bottom: 6;
-            margin-start: 6;
-          }
-        }
+  content: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar header_bar {
+      title-widget: Adw.ViewSwitcher view_switcher {
+        stack: view_stack;
+        policy: wide;
       };
-    };
+    }
 
-    content: Adw.ToolbarView {
-      [top]
-      Adw.HeaderBar {
-        [start]
-        Gtk.ToggleButton sidebar_toggle {
-          icon-name: "sidebar-show-symbolic";
-          tooltip-text: _("Toggle Sidebar");
-          active: true;
-        }
-
-        title-widget: Adw.WindowTitle window_title {
+    content: Adw.ToastOverlay toast_overlay {
+      Adw.ViewStack view_stack {
+        // ── Home: big power toggle ───────────────────────────────────────────
+        Adw.ViewStackPage {
+          name: "home";
           title: _("Home");
-        };
-      }
-
-      content: Adw.ToastOverlay toast_overlay {
-        Adw.StatusPage status_page {
           icon-name: "go-home-symbolic";
-          title: _("Home");
-          description: _("Pick a page from the sidebar, or press the button.");
 
-          Gtk.Button button {
-            label: _("Click me!");
-            halign: center;
+          child: Gtk.ScrolledWindow {
+            hscrollbar-policy: never;
 
-            styles [
-              "pill",
-              "suggested-action",
-            ]
-          }
+            Adw.Clamp {
+              maximum-size: 400;
+              valign: center;
+              margin-top: 36;
+              margin-bottom: 36;
+              margin-start: 12;
+              margin-end: 12;
+
+              Gtk.Box {
+                orientation: vertical;
+                spacing: 24;
+
+                // Actionable: the button's active state *is* the app.enabled state,
+                // so it stays in sync with the tray "Enable" checkbox automatically.
+                Gtk.ToggleButton power_toggle {
+                  action-name: "app.enabled";
+                  halign: center;
+                  tooltip-text: _("Turn Kopico On or Off");
+
+                  styles [
+                    "circular",
+                    "power-toggle",
+                  ]
+
+                  Gtk.Image {
+                    icon-name: "system-shutdown-symbolic";
+                    pixel-size: 64;
+                    accessible-role: presentation;
+                  }
+
+                  accessibility {
+                    label: _("Kopico");
+                  }
+                }
+
+                Gtk.Box {
+                  orientation: vertical;
+                  spacing: 6;
+
+                  Gtk.Label state_title {
+                    label: _("Kopico Is On");
+                    wrap: true;
+                    justify: center;
+
+                    styles [
+                      "title-1",
+                    ]
+                  }
+
+                  Gtk.Label state_description {
+                    label: _("Kopico is running. Turn it off at any time from here or from the system tray.");
+                    wrap: true;
+                    justify: center;
+
+                    styles [
+                      "dim-label",
+                    ]
+                  }
+                }
+              }
+            }
+          };
         }
-      };
+
+        // ── Advanced settings ───────────────────────────────────────────────
+        Adw.ViewStackPage {
+          name: "advanced";
+          title: _("Advanced");
+          icon-name: "emblem-system-symbolic";
+
+          child: Adw.PreferencesPage {
+            title: _("Advanced");
+
+            Adw.PreferencesGroup {
+              title: _("Background");
+
+              Adw.SwitchRow tray_row {
+                title: _("Show in System Tray");
+                subtitle: _("Keep Kopico running in the background when the window is closed");
+                active: true;
+              }
+            }
+          };
+        }
+      }
     };
+
+    [bottom]
+    Adw.ViewSwitcherBar switcher_bar {
+      stack: view_stack;
+    }
   };
 }
-

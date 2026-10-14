@@ -43,9 +43,12 @@ kopico-desktop/
 ├── meson.build                                 # Meson build (Blueprint + gresource + cargo)
 ├── Cargo.toml
 ├── src/
-│   └── main.rs                                 # Application entry point + signal handlers
+│   ├── main.rs                                 # Entry point, app actions, window + signal handlers
+│   ├── tray.rs                                 # System tray icon + menu (tray-icon crate)
+│   └── notification.rs                         # System notifications (Linux only, gio)
 └── data/
     ├── in.tl2a.kopico-desktop.gresource.xml   # GResource manifest
+    ├── style.css                               # App CSS (auto-loaded by AdwApplication)
     └── ui/
         └── window.blp                          # ✏️  Edit UI here (Blueprint markup)
 ```
@@ -136,12 +139,23 @@ Always annotate the type — Rust cannot infer it from `object()`.
 ### Property Bindings (bidirectional sync)
 
 ```rust
-split_view
-    .bind_property("show-sidebar", &sidebar_toggle, "active")
+source
+    .bind_property("some-prop", &target, "active")
     .bidirectional()
     .sync_create()   // immediately syncs current value
     .build();
 ```
+
+### App State = Stateful Actions (preferred over bindings for app-wide state)
+
+App-wide toggles live in `gio::SimpleAction::new_stateful(name, None, &bool)` registered
+in `setup_app()`. Widgets bind to them in Blueprint with `action-name: "app.<name>";` —
+a `Gtk.ToggleButton` then reflects and changes the state with **no Rust code**, and the
+tray menu dispatches to the same action. Side effects go in `connect_change_state`
+(call `action.set_state(...)` there). Read state with `action_bool(app, "<name>")`.
+
+`Adw.SwitchRow` is not actionable for state — set it from `action_bool()` and call
+`app.change_action_state()` from `connect_active_notify` (see `tray_row` in `main.rs`).
 
 ### Signal Handlers (clone pattern)
 
@@ -167,22 +181,38 @@ let toast = adw::Toast::builder()
 toast_overlay.add_toast(toast);
 ```
 
-### OverlaySplitView (responsive sidebar)
+### Tabs: ViewStack + ViewSwitcher (current window layout)
 
 ```blueprint
-Adw.OverlaySplitView split_view {
-  show-sidebar: true;
-
-  Adw.Breakpoint {
-    condition ("max-width: 600sp")
-    setters { split_view.collapsed: true; }
+Adw.ApplicationWindow window {
+  Adw.Breakpoint {                       // narrow: tabs move to the bottom bar
+    condition ("max-width: 550sp")
+    setters { switcher_bar.reveal: true; view_switcher.visible: false; }
   }
 
-  sidebar: Adw.ToolbarView { … };
-  content: Adw.ToolbarView { … };
+  content: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar { title-widget: Adw.ViewSwitcher view_switcher { stack: view_stack; policy: wide; }; }
+
+    content: Adw.ViewStack view_stack {
+      Adw.ViewStackPage { name: "home"; title: _("Home"); icon-name: "go-home-symbolic"; child: …; }
+    };
+
+    [bottom]
+    Adw.ViewSwitcherBar switcher_bar { stack: view_stack; }
+  };
 }
 ```
-In Rust, bind `show-sidebar` ↔ a `ToggleButton.active` for the hamburger button.
+Add a tab = add an `Adw.ViewStackPage` (needs `title` + `icon-name` for the switcher).
+Settings-style tabs use `Adw.PreferencesPage` (give it a `title`) → `Adw.PreferencesGroup` → rows.
+
+### Custom CSS
+
+`data/style.css` is registered in the gresource at `/in/tl2a/kopico-desktop/style.css`;
+`AdwApplication` loads it automatically (no `CssProvider` code). Use libadwaita CSS
+variables (`var(--accent-bg-color)`, …) instead of hard-coded colours so light/dark and the
+system accent colour keep working. `build.rs`/`meson.build` pass `data/` as a second
+`--sourcedir`, so new hand-written resources only need a `<file>` entry in the manifest.
 
 ### NavigationView (multi-page navigation)
 
@@ -217,10 +247,75 @@ Push/pop in Rust: `nav.push_by_tag("detail")` / `nav.pop()`.
 |---|---|---|
 | `gtk4` | `0.11` | `features = ["gnome_50"]` |
 | `libadwaita` (alias `adw`) | `0.9` | `features = ["v1_9"]` |
-| `gio` | `0.20` | For `Resource`, `resources_register` |
+| `tray-icon` | `0.26` | `default-features = false, features = ["ksni"]` — see System Tray |
 
-Bump feature flags together when targeting a newer GNOME release.
-`gnome_50` enables APIs added up to GNOME 50 / GTK 4.18.
+- `libadwaita 0.9` is built against `gtk4 0.11`; bump them together (`cargo info libadwaita@<ver>`
+  lists the matching `gtk` version). `cargo tree -i gtk4` must show a single version.
+- Use `gtk4::gio` / `gtk4::glib` — do **not** add `gio` or `glib` as separate crates; a
+  different version gives incompatible types and a second copy of the bindings.
+- Feature flags are *minimum system library* versions, checked at build time:
+  `gnome_50` = GTK 4.22 + GLib/GIO 2.88, `v1_9` = libadwaita 1.9. Never set a flag newer
+  than the installed library (`pkg-config --modversion gtk4 libadwaita-1`).
+
+---
+
+## System Tray (`src/tray.rs`)
+
+With tray support on (default), closing the window **hides it to the tray** instead of
+quitting. Tray menu:
+
+| Item | Action | Behaviour |
+|---|---|---|
+| Enable (checkbox) | `app.enabled` | Stateful bool; same state as the Home page power toggle. Icon turns **green** when on |
+| Settings | `app.show-window` | Re-presents the hidden window (creates it if needed) |
+| Quit | `app.quit` (`Ctrl/Cmd+Q`) | `app.quit()` → shutdown drops the tray + hold guard → process exits |
+
+Not in the tray menu: `app.tray` (stateful bool, default `true`) — Advanced →
+*Show in System Tray*. Turning it off drops the `Tray` (icon + hold guard), and the
+close button then quits normally, so the app can never be hidden with no way back.
+
+How it fits together:
+
+- **Menu item id == action name.** `MenuEvent` handler → `glib::idle_add_once` →
+  `gio::Application::default().activate_action(id)`. The handler can run on a
+  non-GTK thread (ksni worker on Linux), so only the `String` id crosses threads — never
+  touch widgets inside it. Add a tray item = add an `app.*` action + a menu item with that id.
+- **Lifecycle.** `tray::Tray::new()` creates the icon and takes `app.hold()` so the process
+  survives with every window hidden; dropping the `Tray` removes both. `setup_app()` keeps it
+  in an `Rc<RefCell<Option<Tray>>>`, created at startup, recreated/dropped by `app.tray`,
+  and dropped in `connect_shutdown`. `install_menu_handler()` runs once at startup.
+- **Single window.** `connect_activate` → `show_window()` reuses `app.windows()[0]`, so
+  relaunching the app or clicking Settings never creates a duplicate.
+- **Close → hide.** `window.connect_close_request` hides the window and returns
+  `Propagation::Stop` only while `app.tray` is on; otherwise it returns `Proceed` and the
+  app exits as usual. With the tray on, only `app.quit` really exits.
+
+Platform notes:
+
+- **Linux:** must use the `ksni` backend. The default `libappindicator` backend loads
+  **GTK 3**, which aborts when mixed with GTK 4 in one process. GNOME Shell shows tray
+  icons only with the *AppIndicator and KStatusNotifierItem Support* extension (KDE etc. work
+  out of the box).
+- **macOS:** the icon is a template image (drawn black, recoloured by the menu bar). The Dock
+  icon stays while the window is hidden; hiding it would need
+  `NSApplication.setActivationPolicy(.accessory)` via `objc2-app-kit`.
+- The tray icon is generated in code (`tray_icon_image(colour)`); replace it with real artwork
+  via `Icon::from_rgba` when the app has an icon. `Tray::set_enabled()` swaps it:
+  on → `GREEN` drawn as-is; off → `NORMAL` (macOS: black **template**, recoloured by the menu
+  bar; elsewhere Adwaita blue). A template icon can never be coloured — that's why the
+  enabled icon must use `set_icon`, not `set_icon_templated`.
+
+### Notifications (`src/notification.rs`)
+
+`notification::send_enabled(app)` fires from `app.enabled`'s `change_state` on an
+off → on transition only (never at startup).
+
+- **Linux:** `gio::Notification` + `app.send_notification()`; clicking it runs
+  `app.show-window`. GNOME Shell only shows these for apps with an installed
+  `in.tl2a.kopico-desktop.desktop` file (not shipped yet — add one via Meson when packaging).
+- **macOS: no notifications, by design.** `mod notification` and its call site are behind
+  `#[cfg(not(target_os = "macos"))]`. Don't add `gio::Notification` calls for macOS either —
+  GLib has no macOS backend in MacPorts/Homebrew builds, so they would be silently dropped.
 
 ---
 
@@ -233,4 +328,9 @@ Bump feature flags together when targeting a newer GNOME release.
 | Missing `fs = import('fs')` in `meson.build` | `fs.stem()` fails at configure time |
 | Widget ID mismatch between `.blp` and `builder.object("id")` | Panics at runtime — keep IDs in sync |
 | Editing the generated `.ui` file | It's regenerated from `.blp` every build — edit `.blp` only |
+| `tray-icon` with default features on Linux | Pulls in GTK 3 → crash; keep `default-features = false, features = ["ksni"]` |
+| Expecting notifications on macOS | Not supported by design — `notification.rs` is Linux-only; test on Linux |
+| Touching widgets inside `MenuEvent::set_event_handler` | May be off the main thread — forward the id with `glib::idle_add_once` |
+| Calling `build_ui()` directly from `activate` | Creates duplicate windows — go through `show_window()` |
+| `GLib-GObject-CRITICAL … type '(null)'` then segfault at startup | Two GLib installs linked (Homebrew + MacPorts). Check `otool -L target/debug/kopico-desktop`; don't put Homebrew dirs in `PKG_CONFIG_PATH` |
 

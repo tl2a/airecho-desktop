@@ -1,0 +1,14 @@
+/* Loaded automatically by AdwApplication from /in/tl2a/kopico-desktop/style.css */
+
+/* Big circular power toggle on the Home page */
+.power-toggle {
+  min-width: 128px;
+  min-height: 128px;
+  padding: 0;
+}
+
+/* On = accent colour, following the system accent and light/dark style */
+.power-toggle:checked {
+  background-color: var(--accent-bg-color);
+  color: var(--accent-fg-color);
+}

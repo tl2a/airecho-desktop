@@ -65,11 +65,17 @@ fn main() {
 
     let gresource_out = out_dir.join(format!("{APP_ID}.gresource"));
 
+    // Static resources listed in the manifest (e.g. style.css) live in data/
+    let data_src_dir = manifest_dir.join("data");
+    println!("cargo:rerun-if-changed={}", data_src_dir.join("style.css").display());
+
+    // Generated .ui files are looked up first, then hand-written files in data/
     let status = Command::new(&glib_compile_resources)
         .arg(format!(
             "--sourcedir={}",
             out_dir.join("data").display()
         ))
+        .arg(format!("--sourcedir={}", data_src_dir.display()))
         .arg(format!("--target={}", gresource_out.display()))
         .arg(&gresource_xml)
         .status()

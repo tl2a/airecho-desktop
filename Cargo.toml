@@ -4,8 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-# Force both crates to share the exact same underlying glib/gio release versions
+# libadwaita 0.9 is built against gtk4 0.11 — keep these two in lockstep.
+# Feature flags set the *minimum system library* versions (GTK 4.22 / libadwaita 1.9).
 gtk4 = { version = "0.11", features = ["gnome_50"] }
 adw = { package = "libadwaita", version = "0.9", features = ["v1_9"] }
-# Needed for resources_register_include! (embeds .gresource bytes at link time)
-gio = { version = "0.20" }
+# The default `libappindicator` backend loads GTK 3, which cannot coexist with GTK 4
+# in one process. `ksni` (D-Bus StatusNotifierItem) is used on Linux instead; the
+# feature has no effect on macOS/Windows.
+tray-icon = { version = "0.26.1", default-features = false, features = ["ksni"] }

@@ -2,6 +2,7 @@
 <gresources>
   <gresource prefix="/in/tl2a/kopico-desktop">
     <file preprocess="xml-stripblanks">ui/window.ui</file>
+    <!-- Picked up automatically by AdwApplication (resource base path + /style.css) -->
+    <file>style.css</file>
   </gresource>
 </gresources>
-
