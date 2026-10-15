@@ -1,4 +1,7 @@
-//! System notifications (Linux/BSD only — this module is not compiled on macOS).\n//!\n//! Uses `gio::Notification`, the GNOME-native API; clicking a notification runs\n//! `app.show-window`.
+//! System notifications (Linux/BSD only — this module is not compiled on macOS).
+//!
+//! Uses `gio::Notification`, the GNOME-native API; clicking a notification runs
+//! `app.show-window`.
 
 use adw::Application;
 use adw::prelude::*;
@@ -16,12 +19,20 @@ pub fn send_enabled(app: &Application) {
     app.send_notification(Some(ENABLED_ID), &notification);
 }
 
-/// Tell the user a file arrived via croc.
-pub fn send_file_received(app: &Application, filename: &str) {
-    let notification = gio::Notification::new("File Received");
-    notification.set_body(Some(&format!("\u{201c}{filename}\u{201d} saved to ~/Downloads/Kopico")));
+/// Tell the user a text message arrived and is on the clipboard. The text itself is
+/// not shown — notifications can appear on the lock screen.
+pub fn send_text_received(app: &Application, message: &str) {
+    let notification = gio::Notification::new("Text Received");
+    notification.set_body(Some(message));
     notification.set_default_action(&format!("app.{}", crate::tray::ACTION_SHOW_WINDOW));
-    // Each file gets the same id → consecutive files replace each other instead
-    // of stacking (keeps the notification centre tidy).
+    app.send_notification(Some(FILE_ID), &notification);
+}
+
+/// Tell the user files arrived via croc. `message` is e.g. "“a.jpg” saved to ~/Downloads/Kopico".
+pub fn send_files_received(app: &Application, message: &str) {
+    let notification = gio::Notification::new("Files Received");
+    notification.set_body(Some(message));
+    notification.set_default_action(&format!("app.{}", crate::tray::ACTION_SHOW_WINDOW));
+    // Same id for every transfer → a new one replaces the last instead of stacking
     app.send_notification(Some(FILE_ID), &notification);
 }

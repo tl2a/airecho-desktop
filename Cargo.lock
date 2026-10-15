@@ -794,9 +794,12 @@ dependencies = [
 name = "kopico-desktop"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
  "dirs-next",
  "gtk4",
  "libadwaita",
+ "objc2-app-kit",
+ "objc2-foundation",
  "tray-icon",
 ]
 

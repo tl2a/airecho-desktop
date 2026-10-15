@@ -14,3 +14,12 @@ adw = { package = "libadwaita", version = "0.9", features = ["v1_9"] }
 tray-icon = { version = "0.26.1", default-features = false, features = ["ksni"] }
 # Platform-aware home/download directory paths (used by the receiver module)
 dirs-next = "2"
+# Wakes the GTK main loop when the croc thread reports an event (no polling)
+async-channel = "2"
+
+# Clipboard on macOS: GTK 4.22's macOS clipboard passes MIME types where AppKit wants
+# UTIs ("'text/plain' is not a valid UTI string") and silently copies nothing, so
+# received text goes to NSPasteboard directly. Same versions tray-icon already uses.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSPasteboard"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString"] }

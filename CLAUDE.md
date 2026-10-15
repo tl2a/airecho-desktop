@@ -44,6 +44,7 @@ kopico-desktop/
 ├── Cargo.toml
 ├── src/
 │   ├── main.rs                                 # Entry point, app actions, window + signal handlers
+│   ├── receiver.rs                             # croc receive loop (background thread)
 │   ├── tray.rs                                 # System tray icon + menu (tray-icon crate)
 │   └── notification.rs                         # System notifications (Linux only, gio)
 └── data/
@@ -248,6 +249,9 @@ Push/pop in Rust: `nav.push_by_tag("detail")` / `nav.pop()`.
 | `gtk4` | `0.11` | `features = ["gnome_50"]` |
 | `libadwaita` (alias `adw`) | `0.9` | `features = ["v1_9"]` |
 | `tray-icon` | `0.26` | `default-features = false, features = ["ksni"]` — see System Tray |
+| `async-channel` | `2` | Background thread → GTK main loop events (no polling) |
+| `dirs-next` | `2` | Downloads / home folder paths |
+| `objc2-app-kit`, `objc2-foundation` | `0.3` | macOS only: `NSPasteboard` for received text (same versions as `tray-icon`) |
 
 - `libadwaita 0.9` is built against `gtk4 0.11`; bump them together (`cargo info libadwaita@<ver>`
   lists the matching `gtk` version). `cargo tree -i gtk4` must show a single version.
@@ -319,6 +323,76 @@ off → on transition only (never at startup).
 
 ---
 
+## Receiving Files (`src/receiver.rs`)
+
+While Kopico is enabled (`app.enabled`), a background thread runs **croc** (external CLI,
+must be installed) again and again, because a croc receiver can't wait for a sender:
+
+| `app.relay-mode` | croc flags | Poll every | Wait per run | Rate-limit back-off |
+|---|---|---|---|---|
+| `local` (default) | `--local`, or only `--ip <app.sender-ip>` when set | 3 s | croc exits by itself (~0.5–1 s) | — |
+| `own-relay` | `--relay <app.relay-address>`, `CROC_PASS` | 10 s | 8 s | 60 s |
+| `public-relay` | — | 30 s | 25 s | 60 s |
+
+Intervals count from the start of a run. Public relays allow ~30 joins/min per IP
+(`croc relay --source-join-limit`), hence 30 s + 60 s back-off. Received files go to
+`~/Downloads/Kopico` (`receiver::default_out_dir()`).
+
+**croc 11.5 output facts the parser relies on (re-verify on croc upgrades):**
+
+- Progress/status goes to **stderr**, separated by `\r` *and* `\n`; stdout only carries
+  errors. There is no `Received 'name'` line, and names in the progress bar are truncated.
+- Phases: `looking for sender…` / `waiting for sender…` → `authenticating code…` →
+  `Receiving N files (…)`. The wait limit applies **only before** a sender is found — a
+  transfer is never killed.
+- `--local`, no sender: exit 1, stdout `could not connect to : found no relay addresses`.
+- `--local --ip host[:port]` (port defaults to 9009) skips multicast discovery and dials
+  the sender's built-in relay directly — needed where discovery fails (seen on macOS).
+  No sender there: exit 1 in ~0.5 s, stdout `… connection refused`.
+- Relay, no sender: croc waits in the room forever → our wait limit kills it.
+- Rate limited: stdout `… relay admission rate limited` (exit 1) or stderr
+  `The relay is rate limiting reconnects…`. Match `rate limit` only — not `429`.
+- Success: exit 0. Received names = new entries in the output folder (diff before/after).
+  `--rename` keeps existing files and guarantees new names, so the diff is reliable.
+- The code goes in `CROC_SECRET` (croc refuses codes in argv on UNIX); minimum 6 chars.
+- **Text** (`croc send --text …`): stderr `Receiving text message (N B)`, stdout = the
+  exact text (no trailing newline added), no file written → `ReceiverEvent::Text`, which
+  `copy_to_clipboard()` in `main.rs` puts on the clipboard. The text is never logged
+  (`KOPICO_DEBUG` shows only its length) or shown in notifications.
+
+**Clipboard:** macOS writes to `NSPasteboard` directly — GTK 4.22's macOS clipboard logs
+`'text/plain' is not a valid UTI string` and copies nothing. Linux uses
+`gdk::Display::clipboard()`; Kopico owns that content while running, and Wayland may
+ignore clipboard changes from an unfocused app (window hidden in the tray) — untested.
+
+**Threading:** `receive_loop` runs on a `croc-receive` thread; both pipes are drained by
+reader threads (a full pipe would block croc). Events (`ReceiverEvent::Received/Failed`)
+reach GTK through `async-channel` + `glib::spawn_future_local` — never poll with
+`glib::idle_add` (it spins the main loop). `ReceiverHandle::stop()` kills croc and returns
+within ~200 ms. `find_croc()` also checks `/usr/local/bin`, `/opt/homebrew/bin`,
+`/opt/local/bin`, `~/.local/bin`, `~/go/bin` (GUI launches get a minimal `PATH`).
+
+**Settings** are stateful string actions created in `setup_app()`: `app.relay-mode`,
+`app.relay-address` (`host:port`), `app.relay-password`, `app.receive-code` (≥ 6 chars),
+`app.sender-ip` (optional, Local mode only; `receiver::is_valid_sender_ip`). An
+invalid value is ignored by `change_state` (the row gets the `error` style); an accepted
+one restarts the loop. `receiver_config()` turns them into a `RelayMode`.
+
+**Debugging:** `KOPICO_DEBUG=1 cargo run` logs every croc run — command line (the code
+and password are never printed), exit status, croc's status lines and stdout, and the
+outcome (`NoSender`, `Received`, `RateLimited`, …).
+`stdout: could not connect to : found no relay addresses` in Local mode means croc's
+multicast discovery found nobody (croc 11.5 gives up in < 1 s; unreliable on macOS) —
+set a Sender IP, which skips discovery.
+
+**Tests:** `cargo test` runs the parser unit tests. The end-to-end tests start a local
+`croc relay` / `croc send` and real croc processes (own relay, local + `--ip`, rate
+limiting, stop latency):
+`cargo test -- --ignored --test-threads=1`. `--local` discovery can't be tested on one
+machine (croc doesn't see its own multicast) — use two devices on the same network.
+
+---
+
 ## Common Pitfalls
 
 | Mistake | Fix |
@@ -331,6 +405,10 @@ off → on transition only (never at startup).
 | `tray-icon` with default features on Linux | Pulls in GTK 3 → crash; keep `default-features = false, features = ["ksni"]` |
 | Expecting notifications on macOS | Not supported by design — `notification.rs` is Linux-only; test on Linux |
 | Touching widgets inside `MenuEvent::set_event_handler` | May be off the main thread — forward the id with `glib::idle_add_once` |
+| Parsing croc **stdout** for received files | croc prints progress on stderr and never names files reliably — diff the output folder |
+| Timing out a croc run that already found a sender | Kills the transfer; the wait limit only applies before `authenticating code…` |
+| `gdk::Clipboard::set_text` on macOS | Silently copies nothing (invalid UTI) — use `copy_to_clipboard()` (NSPasteboard) |
+| `glib::idle_add` returning `Continue` to poll a channel | Busy-loops the main thread; use `async-channel` + `glib::spawn_future_local` |
 | Calling `build_ui()` directly from `activate` | Creates duplicate windows — go through `show_window()` |
 | `GLib-GObject-CRITICAL … type '(null)'` then segfault at startup | Two GLib installs linked (Homebrew + MacPorts). Check `otool -L target/debug/kopico-desktop`; don't put Homebrew dirs in `PKG_CONFIG_PATH` |
 

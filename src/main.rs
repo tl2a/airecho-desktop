@@ -2,7 +2,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use adw::prelude::*;
-use adw::{Application, ApplicationWindow, ComboRow, EntryRow, SwitchRow, Toast, ToastOverlay};
+use adw::{
+    ActionRow, Application, ApplicationWindow, ComboRow, EntryRow, PasswordEntryRow, SwitchRow,
+    Toast, ToastOverlay,
+};
 use adw::gtk::Label;
 use gtk4::{gio, glib};
 
@@ -11,14 +14,27 @@ mod notification;
 mod receiver;
 mod tray;
 
-use receiver::{ReceiverHandle, RelayMode};
+use receiver::{ReceiverEvent, ReceiverHandle, RelayMode};
 use tray::{ACTION_ENABLED, ACTION_QUIT, ACTION_SHOW_WINDOW, ACTION_TRAY, Tray};
 
 const APP_ID: &str = "in.tl2a.kopico-desktop";
 
 /// Default receive code.  Both sender and receiver must agree on this value.
 /// Users can override it in Advanced → Receive Code.
-const DEFAULT_RECEIVE_CODE: &str = "kopico-receive";
+const DEFAULT_RECEIVE_CODE: &str = "my-code-phase";
+/// croc rejects shorter codes.
+const MIN_CODE_LEN: usize = 6;
+
+// Receiver settings — stateful string actions (`app.<name>`), see setup_app()
+const ACTION_RELAY_MODE: &str = "relay-mode";
+const ACTION_RELAY_ADDRESS: &str = "relay-address";
+const ACTION_RELAY_PASSWORD: &str = "relay-password";
+const ACTION_RECEIVE_CODE: &str = "receive-code";
+/// Optional, Local mode only: `--ip` for when multicast discovery doesn't work.
+const ACTION_SENDER_IP: &str = "sender-ip";
+
+/// `app.relay-mode` values, in the same order as the Relay Mode combo row.
+const RELAY_MODES: [&str; 3] = ["local", "own-relay", "public-relay"];
 
 fn main() -> gtk4::glib::ExitCode {
     let bytes = include_bytes!(env!("GRESOURCE_FILE"));
@@ -40,53 +56,80 @@ fn action_bool(group: &impl IsA<gio::ActionGroup>, name: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Current value of a string stateful action.
+fn action_string(group: &impl IsA<gio::ActionGroup>, name: &str) -> String {
+    group
+        .action_state(name)
+        .and_then(|state| state.get::<String>())
+        .unwrap_or_default()
+}
+
+/// Receiver configuration from the `app.relay-*` / `app.receive-code` action states.
+fn receiver_config(app: &Application) -> Result<(RelayMode, String), String> {
+    let mode = match action_string(app, ACTION_RELAY_MODE).as_str() {
+        "own-relay" => {
+            let address = action_string(app, ACTION_RELAY_ADDRESS);
+            if address.is_empty() {
+                return Err("Enter your relay address to start receiving".into());
+            }
+            RelayMode::OwnRelay { address, password: action_string(app, ACTION_RELAY_PASSWORD) }
+        }
+        "public-relay" => RelayMode::PublicRelay,
+        _ => {
+            let ip = action_string(app, ACTION_SENDER_IP);
+            RelayMode::Local { sender_ip: (!ip.is_empty()).then_some(ip) }
+        }
+    };
+    Ok((mode, action_string(app, ACTION_RECEIVE_CODE)))
+}
+
 // ── Receiver state ─────────────────────────────────────────────────────────────
 
+/// The croc receive loop; runs while `app.enabled` is on. Its configuration comes
+/// from the receiver setting actions, so (re)starting always picks up the latest.
+#[derive(Default)]
 struct ReceiverState {
     handle: Option<ReceiverHandle>,
-    mode: RelayMode,
-    code: String,
 }
 
 impl ReceiverState {
-    fn new() -> Self {
-        Self {
-            handle: None,
-            mode: RelayMode::Local,
-            code: DEFAULT_RECEIVE_CODE.to_owned(),
-        }
-    }
-
     fn start(&mut self, app: &Application) {
         if self.handle.is_some() {
             return;
         }
+        let (mode, code) = match receiver_config(app) {
+            Ok(config) => config,
+            Err(message) => {
+                println!("[receiver] not started: {message}");
+                show_toast(app, &message);
+                return;
+            }
+        };
         let out_dir = receiver::default_out_dir();
-        let mode = self.mode;
-        let code = self.code.clone();
+        println!("[receiver] started ({mode:?}, saving to {})", out_dir.display());
+
         let app_weak = app.downgrade();
-
-        let handle = ReceiverHandle::start(mode, out_dir, code, move |filename| {
-            // Called on the GTK main thread via glib::idle_add_once (in receiver.rs)
+        let handle = ReceiverHandle::start(mode, out_dir.clone(), code, move |event| {
+            // Runs on the GTK main thread
             let Some(app) = app_weak.upgrade() else { return };
-            println!("[receiver] received: {filename}");
-
-            #[cfg(not(target_os = "macos"))]
-            notification::send_file_received(&app, &filename);
-
-            // Show an in-app toast on every open window
-            for win in app.windows() {
-                if let Some(win) = win.downcast_ref::<ApplicationWindow>() {
-                    show_toast_on_window(win, &format!("Received: {filename}"));
+            match event {
+                ReceiverEvent::Received(names) => {
+                    let message = received_message(&names, &out_dir);
+                    #[cfg(not(target_os = "macos"))]
+                    notification::send_files_received(&app, &message);
+                    show_toast(&app, &message);
                 }
+                ReceiverEvent::Text(text) => {
+                    copy_to_clipboard(&text);
+                    let message = "Received text copied to clipboard";
+                    #[cfg(not(target_os = "macos"))]
+                    notification::send_text_received(&app, message);
+                    show_toast(&app, message);
+                }
+                ReceiverEvent::Failed(message) => show_toast(&app, &message),
             }
         });
-
         self.handle = Some(handle);
-        println!(
-            "[receiver] started ({:?} mode, code='{}')",
-            self.mode, self.code
-        );
     }
 
     fn stop(&mut self) {
@@ -96,9 +139,60 @@ impl ReceiverState {
         }
     }
 
+    /// Apply new settings — only if the loop is running (Kopico enabled).
     fn restart(&mut self, app: &Application) {
-        self.stop();
-        self.start(app);
+        if self.handle.is_some() || action_bool(app, ACTION_ENABLED) {
+            self.stop();
+            self.start(app);
+        }
+    }
+}
+
+/// "“photo.jpg” saved to ~/Downloads/Kopico" / "3 items saved to …".
+fn received_message(names: &[String], out_dir: &std::path::Path) -> String {
+    let dir = receiver::display_path(out_dir);
+    match names {
+        [] => format!("Files saved to {dir}"),
+        [name] => format!("\u{201c}{name}\u{201d} saved to {dir}"),
+        _ => format!("{} items saved to {dir}", names.len()),
+    }
+}
+
+/// Put `text` on the system clipboard (paste anywhere with Cmd/Ctrl+V).
+///
+/// macOS: written to NSPasteboard directly (stays after Kopico quits) — GTK's macOS
+/// clipboard backend rejects its own MIME types and copies nothing.
+#[cfg(target_os = "macos")]
+fn copy_to_clipboard(text: &str) {
+    use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
+    use objc2_foundation::NSString;
+
+    let pasteboard = NSPasteboard::generalPasteboard();
+    pasteboard.clearContents();
+    // SAFETY: reading an immutable AppKit constant
+    let string_type = unsafe { NSPasteboardTypeString };
+    if !pasteboard.setString_forType(&NSString::from_str(text), string_type) {
+        eprintln!("[receiver] could not copy the received text to the clipboard");
+    }
+}
+
+/// Linux/BSD: GDK clipboard. Kopico owns the content while it runs (a clipboard manager
+/// keeps it after quitting). Wayland compositors may ignore clipboard changes from an
+/// app without keyboard focus, i.e. while the window is hidden in the tray.
+#[cfg(not(target_os = "macos"))]
+fn copy_to_clipboard(text: &str) {
+    match gtk4::gdk::Display::default() {
+        Some(display) => display.clipboard().set_text(text),
+        None => eprintln!("[receiver] no display — text not copied to the clipboard"),
+    }
+}
+
+/// Toast on the main window (if it exists — it may be hidden in the tray).
+fn show_toast(app: &Application, message: &str) {
+    for window in app.windows() {
+        if let Some(window) = window.downcast_ref::<ApplicationWindow>() {
+            show_toast_on_window(window, message);
+        }
     }
 }
 
@@ -128,7 +222,7 @@ fn show_toast_on_window(window: &ApplicationWindow, message: &str) {
 /// Runs once per process on the primary instance: registers actions, tray, receiver.
 fn setup_app(app: &Application) {
     let tray: Rc<RefCell<Option<Tray>>> = Rc::new(RefCell::new(None));
-    let receiver: Rc<RefCell<ReceiverState>> = Rc::new(RefCell::new(ReceiverState::new()));
+    let receiver: Rc<RefCell<ReceiverState>> = Rc::default();
     tray::install_menu_handler();
 
     // ── app.enabled — power toggle + tray checkbox ────────────────────────────
@@ -213,55 +307,37 @@ fn setup_app(app: &Application) {
     app.add_action(&quit_action);
     app.set_accels_for_action("app.quit", &["<primary>q"]);
 
-    // ── app.set-relay-mode ("local" | "relay") ────────────────────────────────
-    // Sent by the relay-mode ComboRow in build_ui.
-    let set_mode_action = gio::SimpleAction::new(
-        "set-relay-mode",
-        Some(glib::VariantTy::STRING),
-    );
-    {
+    // ── Receiver settings: app.relay-mode / relay-address / relay-password / receive-code ──
+    // Stateful string actions: the Advanced page reads them for its initial values and
+    // changes them with change_action_state(); each accepted change restarts the loop.
+    let settings: [(&str, &str, fn(&str) -> bool); 5] = [
+        (ACTION_RELAY_MODE, RELAY_MODES[0], |v| RELAY_MODES.contains(&v)),
+        (ACTION_RELAY_ADDRESS, "", |v| v.is_empty() || v.contains(':')),
+        (ACTION_RELAY_PASSWORD, "", |_| true),
+        (ACTION_RECEIVE_CODE, DEFAULT_RECEIVE_CODE, |v| v.chars().count() >= MIN_CODE_LEN),
+        (ACTION_SENDER_IP, "", |v| v.is_empty() || receiver::is_valid_sender_ip(v)),
+    ];
+    for (name, default, is_valid) in settings {
+        let action = gio::SimpleAction::new_stateful(name, None, &default.to_variant());
         let receiver = receiver.clone();
         let app_w = app.downgrade();
-        set_mode_action.connect_activate(move |_, param| {
-            let Some(mode_str) = param.and_then(|p| p.get::<String>()) else { return };
-            let mode = if mode_str == "local" { RelayMode::Local } else { RelayMode::PublicRelay };
-            let Some(app) = app_w.upgrade() else { return };
-            {
-                let mut r = receiver.borrow_mut();
-                r.mode = mode;
-                if r.handle.is_some() {
-                    r.restart(&app);
-                }
+        action.connect_change_state(move |action, value| {
+            let (Some(value), Some(app)) = (value.and_then(|v| v.get::<String>()), app_w.upgrade())
+            else { return };
+            let value = value.trim().to_owned();
+            if !is_valid(&value) || action.state().and_then(|s| s.get::<String>()) == Some(value.clone()) {
+                return;
             }
+            action.set_state(&value.to_variant());
+            receiver.borrow_mut().restart(&app);
         });
+        app.add_action(&action);
     }
-    app.add_action(&set_mode_action);
 
-    // ── app.set-receive-code (<string>) ───────────────────────────────────────
-    // Sent by the EntryRow apply button in build_ui.
-    let set_code_action = gio::SimpleAction::new(
-        "set-receive-code",
-        Some(glib::VariantTy::STRING),
-    );
-    {
-        let receiver = receiver.clone();
-        let app_w = app.downgrade();
-        set_code_action.connect_activate(move |_, param| {
-            let Some(code) = param.and_then(|p| p.get::<String>()) else { return };
-            let Some(app) = app_w.upgrade() else { return };
-            {
-                let mut r = receiver.borrow_mut();
-                r.code = code;
-                if r.handle.is_some() {
-                    r.restart(&app);
-                }
-            }
-        });
+    // Kopico starts enabled → start receiving right away (Local mode by default)
+    if action_bool(app, ACTION_ENABLED) {
+        receiver.borrow_mut().start(app);
     }
-    app.add_action(&set_code_action);
-
-    // Start the receive loop immediately (Kopico starts enabled)
-    receiver.borrow_mut().start(app);
 
     app.connect_shutdown(move |_| {
         tray.borrow_mut().take();
@@ -288,7 +364,12 @@ fn build_ui(app: &Application) -> ApplicationWindow {
     let state_description: Label    = builder.object("state_description").expect("state_description");
     let tray_row: SwitchRow         = builder.object("tray_row").expect("tray_row");
     let relay_mode_row: ComboRow    = builder.object("relay_mode_row").expect("relay_mode_row");
+    let relay_address_row: EntryRow = builder.object("relay_address_row").expect("relay_address_row");
+    let relay_password_row: PasswordEntryRow =
+        builder.object("relay_password_row").expect("relay_password_row");
     let receive_code_row: EntryRow  = builder.object("receive_code_row").expect("receive_code_row");
+    let sender_ip_row: EntryRow     = builder.object("sender_ip_row").expect("sender_ip_row");
+    let save_to_row: ActionRow      = builder.object("save_to_row").expect("save_to_row");
     let toast_overlay: ToastOverlay = builder.object("toast_overlay").expect("toast_overlay");
 
     window.set_application(Some(app));
@@ -312,34 +393,64 @@ fn build_ui(app: &Application) -> ApplicationWindow {
         });
     }
 
-    // ── Advanced: relay mode ──────────────────────────────────────────────────
-    // Index 0 = Local, 1 = Public Relay (matches the StringList in window.blp)
+    // ── Advanced: receive settings ────────────────────────────────────────────
+    save_to_row.set_subtitle(&receiver::display_path(&receiver::default_out_dir()));
+
+    // Relay mode — combo index ↔ RELAY_MODES; each mode shows only its own rows
+    let update_relay_rows = {
+        let relay_address_row = relay_address_row.clone();
+        let relay_password_row = relay_password_row.clone();
+        let sender_ip_row = sender_ip_row.clone();
+        move |row: &ComboRow| {
+            let own_relay = row.selected() == 1;
+            relay_address_row.set_visible(own_relay);
+            relay_password_row.set_visible(own_relay);
+            sender_ip_row.set_visible(row.selected() == 0);
+            row.set_subtitle(match row.selected() {
+                0 => "Devices on this network · checks every 3 s",
+                1 => "Your own croc relay · checks every 10 s",
+                _ => "croc\u{2019}s public relays · checks every 30 s",
+            });
+        }
+    };
+    let current_mode = action_string(app, ACTION_RELAY_MODE);
+    let index = RELAY_MODES.iter().position(|m| *m == current_mode).unwrap_or(0);
+    relay_mode_row.set_selected(index as u32);
+    update_relay_rows(&relay_mode_row);
     {
         let app_w = app.downgrade();
-        let toast = toast_overlay.clone();
         relay_mode_row.connect_selected_notify(move |row| {
             let Some(app) = app_w.upgrade() else { return };
-            let (mode_str, label) = if row.selected() == 0 {
-                ("local", "Local (LAN)")
-            } else {
-                ("relay", "Public Relay")
-            };
-            app.activate_action("set-relay-mode", Some(&mode_str.to_variant()));
-            toast.add_toast(Toast::new(&format!("Relay mode: {label}")));
+            update_relay_rows(row);
+            let mode = RELAY_MODES.get(row.selected() as usize).unwrap_or(&RELAY_MODES[0]);
+            app.change_action_state(ACTION_RELAY_MODE, &mode.to_variant());
         });
     }
 
-    // ── Advanced: receive code ────────────────────────────────────────────────
-    receive_code_row.set_text(DEFAULT_RECEIVE_CODE);
-    {
+    // Text settings: apply button → validated action change; invalid input is marked
+    let text_rows: [(&EntryRow, &str, &str); 4] = [
+        (&sender_ip_row, ACTION_SENDER_IP, "Use an IP address or host name, e.g. 192.168.1.20 or 192.168.1.20:9009"),
+        (&relay_address_row, ACTION_RELAY_ADDRESS, "Use host:port, e.g. myrelay.example.com:9009"),
+        (relay_password_row.upcast_ref(), ACTION_RELAY_PASSWORD, ""),
+        (&receive_code_row, ACTION_RECEIVE_CODE, "The code needs at least 6 characters"),
+    ];
+    for (row, action, invalid_message) in text_rows {
+        row.set_text(&action_string(app, action));
+        row.connect_changed(|row| row.remove_css_class("error"));
         let app_w = app.downgrade();
         let toast = toast_overlay.clone();
-        receive_code_row.connect_apply(move |row| {
+        let action = action.to_owned();
+        let invalid_message = invalid_message.to_owned();
+        row.connect_apply(move |row| {
             let Some(app) = app_w.upgrade() else { return };
-            let code = row.text().to_string();
-            if code.trim().is_empty() { return; }
-            app.activate_action("set-receive-code", Some(&code.to_variant()));
-            toast.add_toast(Toast::new("Receive code updated — restart sender too"));
+            let value = row.text().trim().to_owned();
+            app.change_action_state(&action, &value.to_variant());
+            if action_string(&app, &action) == value {
+                toast.add_toast(Toast::new("Saved"));
+            } else {
+                row.add_css_class("error");
+                toast.add_toast(Toast::new(&invalid_message));
+            }
         });
     }
 

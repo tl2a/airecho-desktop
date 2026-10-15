@@ -20,6 +20,7 @@ Covers real patterns used in `src/main.rs` and `data/ui/*.blp`.
 11. [GObject Properties & Values](#11-gobject-properties--values)
 12. [Debugging Tips](#12-debugging-tips)
 13. [Background Apps & System Tray](#13-background-apps--system-tray)
+14. [Background Threads → GTK](#14-background-threads--gtk)
 
 ---
 
@@ -608,3 +609,31 @@ hold guard there → `app.run()` returns and the process exits. No background in
 | macOS | Create the tray on the main thread (startup). Template icons follow menu bar light/dark but are always monochrome — use `set_icon` (non-template) for a coloured state such as green = enabled |
 | macOS notifications | Not supported in this project — `gio::Notification` has no GLib macOS backend, so `notification.rs` is compiled for Linux only |
 
+
+
+---
+
+## 14. Background Threads → GTK
+
+GTK objects may only be touched on the main thread. Send plain data from a worker thread
+over `async-channel` and handle it in a local future — it wakes only when a message
+arrives (used by `src/receiver.rs`):
+
+```rust
+let (tx, rx) = async_channel::unbounded::<Event>();
+
+std::thread::spawn(move || {
+    // … blocking work …
+    let _ = tx.send_blocking(Event::Done(result));   // Event must be Send
+});
+
+glib::spawn_future_local(async move {               // main thread; may capture widgets
+    while let Ok(event) = rx.recv().await {
+        toast_overlay.add_toast(adw::Toast::new("Done"));
+    }
+});                                                  // ends when all senders are dropped
+```
+
+Don't poll a `std::sync::mpsc` receiver from `glib::idle_add` — an idle source that
+returns `ControlFlow::Continue` runs continuously and pins a CPU core.
+`glib::MainContext::channel` no longer exists in current gtk-rs.
