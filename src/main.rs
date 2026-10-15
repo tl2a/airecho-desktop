@@ -176,15 +176,50 @@ fn copy_to_clipboard(text: &str) {
     }
 }
 
-/// Linux/BSD: GDK clipboard. Kopico owns the content while it runs (a clipboard manager
-/// keeps it after quitting). Wayland compositors may ignore clipboard changes from an
-/// app without keyboard focus, i.e. while the window is hidden in the tray.
-#[cfg(not(target_os = "macos"))]
+/// Linux/Wayland: use wl-copy's data-control support so copying works while unfocused
+/// when the compositor supports it. Fall back to GDK when wl-copy is unavailable.
+#[cfg(target_os = "linux")]
 fn copy_to_clipboard(text: &str) {
+    if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+        match copy_with_wl_copy(text) {
+            Ok(()) => return,
+            Err(err) => eprintln!("[receiver] wl-copy failed ({err}); falling back to GDK"),
+        }
+    }
+    copy_with_gdk(text);
+}
+
+/// BSD and other non-macOS platforms: GDK clipboard.
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn copy_to_clipboard(text: &str) {
+    copy_with_gdk(text);
+}
+
+#[cfg(not(target_os = "macos"))]
+fn copy_with_gdk(text: &str) {
     match gtk4::gdk::Display::default() {
         Some(display) => display.clipboard().set_text(text),
         None => eprintln!("[receiver] no display — text not copied to the clipboard"),
     }
+}
+
+#[cfg(target_os = "linux")]
+fn copy_with_wl_copy(text: &str) -> std::io::Result<()> {
+    use std::{
+        io::{self, Write},
+        process::{Command, Stdio},
+    };
+
+    let mut child = Command::new("wl-copy").stdin(Stdio::piped()).spawn()?;
+    let mut stdin = child.stdin.take().expect("wl-copy stdin is piped");
+    let write_result = stdin.write_all(text.as_bytes());
+    drop(stdin);
+    let status = child.wait()?;
+    write_result?;
+    if !status.success() {
+        return Err(io::Error::other(format!("exited with {status}")));
+    }
+    Ok(())
 }
 
 /// Toast on the main window (if it exists — it may be hidden in the tray).

@@ -361,9 +361,12 @@ Intervals count from the start of a run. Public relays allow ~30 joins/min per I
   (`KOPICO_DEBUG` shows only its length) or shown in notifications.
 
 **Clipboard:** macOS writes to `NSPasteboard` directly — GTK 4.22's macOS clipboard logs
-`'text/plain' is not a valid UTI string` and copies nothing. Linux uses
-`gdk::Display::clipboard()`; Kopico owns that content while running, and Wayland may
-ignore clipboard changes from an unfocused app (window hidden in the tray) — untested.
+`'text/plain' is not a valid UTI string` and copies nothing. Linux on Wayland tries
+`wl-copy` (from `wl-clipboard`) first; its data-control protocol can set the clipboard
+without keyboard focus when supported by the compositor. If `wl-copy` is missing or fails,
+Kopico falls back to `gdk::Display::clipboard()`. Compositors without data-control support
+may still ignore writes from an unfocused app (for example, while Kopico is hidden in the
+tray).
 
 **Threading:** `receive_loop` runs on a `croc-receive` thread; both pipes are drained by
 reader threads (a full pipe would block croc). Events (`ReceiverEvent::Received/Failed`)
@@ -411,4 +414,3 @@ machine (croc doesn't see its own multicast) — use two devices on the same net
 | `glib::idle_add` returning `Continue` to poll a channel | Busy-loops the main thread; use `async-channel` + `glib::spawn_future_local` |
 | Calling `build_ui()` directly from `activate` | Creates duplicate windows — go through `show_window()` |
 | `GLib-GObject-CRITICAL … type '(null)'` then segfault at startup | Two GLib installs linked (Homebrew + MacPorts). Check `otool -L target/debug/kopico-desktop`; don't put Homebrew dirs in `PKG_CONFIG_PATH` |
-
