@@ -11,6 +11,10 @@
 
 App ID: `in.tl2a.kopico-desktop`
 
+Human-facing docs: `README.md` (purpose, requirements, build per platform) and `docs/`
+(`development.md`, `architecture.md`, `receiver.md`, `platform-decisions.md`). When a
+platform constraint or decision changes, update `docs/platform-decisions.md` too.
+
 ---
 
 ## Build Commands
@@ -18,7 +22,7 @@ App ID: `in.tl2a.kopico-desktop`
 ```bash
 # Dev (cargo-only, no Meson needed)
 cargo build
-cargo run
+cargo run          # macOS: runs from "~/Applications/Kopico Desktop.app" (notifications)
 
 # Production / install (Meson)
 meson setup builddir
@@ -40,14 +44,19 @@ blueprint-compiler compile --output /dev/null data/ui/window.blp
 ```
 kopico-desktop/
 ├── build.rs                                    # Drives blp→ui→gresource for cargo builds
+├── dev-install.sh                              # Registers the dev build (.desktop / .app) for notifications
+├── .cargo/config.toml                          # macOS: `cargo run` runner → scripts/macos-app.sh
+├── scripts/macos-app.sh                        # Builds/signs/registers Kopico Desktop.app, runs from it
 ├── meson.build                                 # Meson build (Blueprint + gresource + cargo)
 ├── Cargo.toml
 ├── src/
 │   ├── main.rs                                 # Entry point, app actions, window + signal handlers
 │   ├── receiver.rs                             # croc receive loop (background thread)
 │   ├── tray.rs                                 # System tray icon + menu (tray-icon crate)
-│   └── notification.rs                         # System notifications (Linux only, gio)
+│   └── notification.rs                         # System notifications (gio on Linux, notify-rust on macOS)
 └── data/
+    ├── in.tl2a.kopico-desktop.desktop         # Linux desktop entry (dev-install.sh patches Exec=)
+    ├── macos/Info.plist                        # macOS bundle metadata (scripts/macos-app.sh builds the .app)
     ├── in.tl2a.kopico-desktop.gresource.xml   # GResource manifest
     ├── style.css                               # App CSS (auto-loaded by AdwApplication)
     └── ui/
@@ -252,6 +261,7 @@ Push/pop in Rust: `nav.push_by_tag("detail")` / `nav.pop()`.
 | `async-channel` | `2` | Background thread → GTK main loop events (no polling) |
 | `dirs-next` | `2` | Downloads / home folder paths |
 | `objc2-app-kit`, `objc2-foundation` | `0.3` | macOS only: `NSPasteboard` for received text (same versions as `tray-icon`) |
+| `notify-rust` | `4.18` | macOS only, `default-features = false, features = ["preview-macos-un"]` (UNUserNotificationCenter) |
 
 - `libadwaita 0.9` is built against `gtk4 0.11`; bump them together (`cargo info libadwaita@<ver>`
   lists the matching `gtk` version). `cargo tree -i gtk4` must show a single version.
@@ -314,12 +324,33 @@ Platform notes:
 `notification::send_enabled(app)` fires from `app.enabled`'s `change_state` on an
 off → on transition only (never at startup).
 
+Also: files received, text received (the text itself is never in a notification). One API,
+`send_enabled` / `send_files_received` / `send_text_received`, two backends:
+
 - **Linux:** `gio::Notification` + `app.send_notification()`; clicking it runs
   `app.show-window`. GNOME Shell only shows these for apps with an installed
-  `in.tl2a.kopico-desktop.desktop` file (not shipped yet — add one via Meson when packaging).
-- **macOS: no notifications, by design.** `mod notification` and its call site are behind
-  `#[cfg(not(target_os = "macos"))]`. Don't add `gio::Notification` calls for macOS either —
-  GLib has no macOS backend in MacPorts/Homebrew builds, so they would be silently dropped.
+  `in.tl2a.kopico-desktop.desktop` file — `./dev-install.sh` installs it for dev builds.
+- **macOS:** `notify-rust` with `preview-macos-un` → Apple's `UNUserNotificationCenter`
+  (not the deprecated `NSUserNotificationCenter`). `gio::Notification` can't be used — GLib
+  has no macOS backend in MacPorts/Homebrew builds. Requirements, all verified on macOS 26:
+  - The process must run **from inside an `.app` bundle** (needs a bundle identifier) —
+    a bare `target/debug` binary gets `NoBundleIdentifier`; Kopico then logs one line and
+    skips notifications.
+  - The bundle must be **signed** — unsigned, `request_auth` is answered "not allowed"
+    without a prompt. Ad-hoc signing (`codesign --sign -`) is enough for development.
+  - `notification::init()` (startup) calls `request_auth`; the first time, macOS shows the
+    "Allow notifications?" prompt and lists Kopico Desktop in System Settings →
+    Notifications. Permission is tied to the bundle id and survives rebuilds/re-signing.
+  - `scripts/macos-app.sh` does all of this: copies the binary into
+    `~/Applications/Kopico Desktop.app` (Info.plist from `data/macos/`), ad-hoc signs it,
+    registers it (`lsregister`) and runs it. `.cargo/config.toml` makes it the `cargo run`
+    runner on macOS (non-app binaries such as tests pass straight through);
+    `./dev-install.sh` calls `scripts/macos-app.sh install`.
+  - Use the **async** API on the GTK main loop (`glib::spawn_future_local` +
+    `show_async()` / `request_auth()`). The blocking `show()` fails with
+    `Mainthread not running` from any thread, because GTK's loop never idles inside
+    `NSRunLoop`. The request itself is sent from notify-rust's worker thread.
+  - Clicking a notification does nothing yet.
 
 ---
 
@@ -406,7 +437,9 @@ machine (croc doesn't see its own multicast) — use two devices on the same net
 | Widget ID mismatch between `.blp` and `builder.object("id")` | Panics at runtime — keep IDs in sync |
 | Editing the generated `.ui` file | It's regenerated from `.blp` every build — edit `.blp` only |
 | `tray-icon` with default features on Linux | Pulls in GTK 3 → crash; keep `default-features = false, features = ["ksni"]` |
-| Expecting notifications on macOS | Not supported by design — `notification.rs` is Linux-only; test on Linux |
+| No Kopico notifications on macOS / not listed in Settings → Notifications | Start via `cargo run` or the `.app` (not `target/debug/kopico-desktop`); the bundle must be signed — `scripts/macos-app.sh` does both |
+| `gio::Notification` on macOS | Silently dropped (no GLib backend) — `notification.rs` uses notify-rust there |
+| notify-rust `show()` / `*_blocking()` on macOS | `Mainthread not running` under GTK — use `show_async()` / `request_auth()` with `glib::spawn_future_local` |
 | Touching widgets inside `MenuEvent::set_event_handler` | May be off the main thread — forward the id with `glib::idle_add_once` |
 | Parsing croc **stdout** for received files | croc prints progress on stderr and never names files reliably — diff the output folder |
 | Timing out a croc run that already found a sender | Kills the transfer; the wait limit only applies before `authenticating code…` |

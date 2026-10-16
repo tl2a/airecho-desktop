@@ -607,7 +607,7 @@ hold guard there → `app.run()` returns and the process exits. No background in
 | Linux | Use `tray-icon` with `default-features = false, features = ["ksni"]` — the default backend loads GTK 3 and crashes a GTK 4 process |
 | GNOME | Needs the *AppIndicator and KStatusNotifierItem Support* extension to show tray icons |
 | macOS | Create the tray on the main thread (startup). Template icons follow menu bar light/dark but are always monochrome — use `set_icon` (non-template) for a coloured state such as green = enabled |
-| macOS notifications | Not supported in this project — `gio::Notification` has no GLib macOS backend, so `notification.rs` is compiled for Linux only |
+| macOS notifications | `gio::Notification` has no GLib macOS backend — `notification.rs` uses `notify-rust` (UNUserNotificationCenter, async on the GTK loop); the app must run from a signed `.app` (`cargo run` does this via `scripts/macos-app.sh`) |
 
 
 

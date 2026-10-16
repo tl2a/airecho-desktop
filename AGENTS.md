@@ -83,10 +83,15 @@ Do **not** mix `gtk4::Widget` and `adw::gtk::Widget` for the same type.
 
 | File | Purpose | Edit? |
 |---|---|---|
+| `README.md`, `docs/*.md` | Human docs — keep in sync with behaviour changes | ✅ Yes |
 | `src/main.rs` | App entry, app actions, window + signal handlers | ✅ Yes |
 | `src/receiver.rs` | croc receive loop (background thread, polling) | ✅ Yes — see CLAUDE.md “Receiving Files” first |
 | `src/tray.rs` | System tray icon + menu → `app.*` actions | ✅ Yes |
-| `src/notification.rs` | System notifications — Linux only (`gio::Notification`) | ✅ Yes |
+| `src/notification.rs` | System notifications — gio on Linux, notify-rust on macOS | ✅ Yes |
+| `dev-install.sh` | Registers the dev build for notifications (Linux `.desktop`, macOS `.app`) | ✅ Yes |
+| `data/macos/Info.plist` | macOS bundle metadata (bundle id must equal `APP_ID`) | ✅ Yes |
+| `scripts/macos-app.sh` | Builds, signs and registers `Kopico Desktop.app`; `cargo run` runner on macOS | ✅ Rarely |
+| `.cargo/config.toml` | Sets that runner for macOS | ✅ Rarely |
 | `data/style.css` | App CSS, auto-loaded by `AdwApplication` | ✅ Yes |
 | `data/ui/window.blp` | Window UI layout | ✅ Yes |
 | `data/*.gresource.xml` | GResource manifest | ✅ When adding `.ui` files |

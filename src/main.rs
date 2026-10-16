@@ -9,7 +9,6 @@ use adw::{
 use adw::gtk::Label;
 use gtk4::{gio, glib};
 
-#[cfg(not(target_os = "macos"))]
 mod notification;
 mod receiver;
 mod tray;
@@ -115,14 +114,12 @@ impl ReceiverState {
             match event {
                 ReceiverEvent::Received(names) => {
                     let message = received_message(&names, &out_dir);
-                    #[cfg(not(target_os = "macos"))]
                     notification::send_files_received(&app, &message);
                     show_toast(&app, &message);
                 }
                 ReceiverEvent::Text(text) => {
                     copy_to_clipboard(&text);
                     let message = "Received text copied to clipboard";
-                    #[cfg(not(target_os = "macos"))]
                     notification::send_text_received(&app, message);
                     show_toast(&app, message);
                 }
@@ -259,19 +256,18 @@ fn setup_app(app: &Application) {
     let tray: Rc<RefCell<Option<Tray>>> = Rc::new(RefCell::new(None));
     let receiver: Rc<RefCell<ReceiverState>> = Rc::default();
     tray::install_menu_handler();
+    notification::init(); // macOS: permission prompt on first run
 
     // ── app.enabled — power toggle + tray checkbox ────────────────────────────
     let enabled_action = gio::SimpleAction::new_stateful(ACTION_ENABLED, None, &true.to_variant());
     {
         let tray = tray.clone();
         let receiver = receiver.clone();
-        #[cfg(not(target_os = "macos"))]
         let app_notif = app.downgrade();
         let app_recv = app.downgrade();
 
         enabled_action.connect_change_state(move |action, value| {
             let Some(enabled) = value.and_then(|v| v.get::<bool>()) else { return };
-            #[cfg(not(target_os = "macos"))]
             let was_enabled = action.state().and_then(|s| s.get::<bool>()).unwrap_or(false);
             action.set_state(&enabled.to_variant());
 
@@ -290,7 +286,6 @@ fn setup_app(app: &Application) {
             }
 
             // System notification on actual off→on transition only
-            #[cfg(not(target_os = "macos"))]
             if enabled && !was_enabled {
                 if let Some(app) = app_notif.upgrade() {
                     notification::send_enabled(&app);
