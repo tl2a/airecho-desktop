@@ -255,7 +255,11 @@ impl Transfers {
         println!("[sender] {what}: {outcome:?}");
         let is_files = matches!(job, SendJob::Files(_));
         let message = match outcome {
-            SendOutcome::Delivered => format!("Sent {what}"),
+            SendOutcome::Delivered { left_out: 0 } => format!("Sent {what}"),
+            SendOutcome::Delivered { left_out } => format!(
+                "Sent {what} \u{2014} left out {left_out} item(s) croc can\u{2019}t send \
+                 (.git/.ssh/.gnupg folders, links pointing outside)"
+            ),
             SendOutcome::NoReceiver => {
                 format!("Not delivered: nobody picked up {what}. Is Kopico running on the other device?")
             }

@@ -10,6 +10,7 @@ use adw::gtk::Label;
 use gtk4::{gio, glib};
 
 mod clipboard;
+mod croc_names;
 mod notification;
 mod receiver;
 mod sender;

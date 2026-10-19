@@ -28,6 +28,32 @@ The other device just keeps receiving — e.g. another Kopico with the same code
 for files:** without it, a croc receiver that has no terminal to ask in declines files
 (`peer error: refusing files` on the sending side) — text is never asked about.
 
+## File names croc refuses
+
+croc 11.5's **receiver** rejects the *whole transfer* if any name in it can't be created
+safely on every OS; the sender doesn't check. In Local mode the sender then fails with
+`peer error: refusing files` (the receiver prints e.g. `unsafe receive path …: non-printable
+character U+202F`); **on a relay the sender even exits 0** although nothing arrived.
+Refused (croc's `receivefs` rules):
+
+| Name | Example |
+|---|---|
+| Any space other than U+0020, invisible/format or control characters | **macOS screenshots and screen recordings**: `Screenshot … 10.15.32 AM.png` has U+202F before `AM` |
+| `:` (Finder shows it as `/`), a trailing `.` or space | `10:30 notes`, `draft.` |
+| Windows device names, any extension | `CON`, `aux.txt`, `COM1.log` |
+| `.git`, `.ssh`, `.gnupg` anywhere in a folder | sending a source repository |
+| Names in one folder that differ only in case | `A.txt` + `a.txt` (Linux) |
+| A symlink with an absolute target or `..` | `link → /etc/hosts`, `link → ../x` |
+
+Kopico (`src/croc_names.rs`) checks every name before a send. Items that are fine are sent
+from where they are. Any other item is **mirrored into the private send folder** with safe
+names — `U+202F`/no-break spaces → space, `:` `\` → `-`, invisible characters removed,
+trailing `.`/space trimmed, `_` before device names, ` (2)` for case clashes — using hard
+links (instant, no extra space; a copy only across volumes). The mirror is deleted when
+croc exits (leftovers from a quit mid-send after a day). `.git`/`.ssh`/`.gnupg` folders and
+symlinks pointing outside are **left out**, and the "Sent …" message says how many.
+Originals are never renamed or changed.
+
 ## Sending and receiving share one code
 
 A `croc send` and Kopico's own receive loop with the same code would find each other —
@@ -102,7 +128,7 @@ a.txt 100% |████| (11/11 B, …) 1/2           ← progress (files)
 
 | Outcome | Copied text | Files |
 |---|---|---|
-| Delivered | toast "Sent copied text" | notification + toast "Sent “x”" |
+| Delivered | toast "Sent copied text" | notification + toast "Sent “x”" (+ how many items were left out, if any) |
 | Nobody picked it up | toast | notification + toast |
 | Failed (croc missing, relay rate limit, …) | toast | notification + toast |
 | Cancelled | silent (replaced by newer text) | toast |

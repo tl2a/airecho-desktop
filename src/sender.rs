@@ -32,6 +32,9 @@
 //! only deletes it after a delivered send — a killed send (cancelled, timed out, quit)
 //! leaves the copied text behind. So croc runs in a private directory ([`work_dir`]) that
 //! is emptied of `croc-stdin-*` before and after every send.
+//!
+//! Files whose names croc's receiver refuses (e.g. macOS screenshots, which contain U+202F)
+//! are sent under safe names — see [`crate::croc_names`].
 
 use std::{
     io::Read,
@@ -47,6 +50,7 @@ use std::{
 
 use gtk4::glib;
 
+use crate::croc_names;
 use crate::receiver::{self, RelayMode};
 
 /// How long to wait for a receiver before giving up. The other side polls every 3 s
@@ -86,8 +90,9 @@ impl SendJob {
 /// How a send ended.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SendOutcome {
-    /// The receiver got everything.
-    Delivered,
+    /// The receiver got everything — except `left_out` items croc can't send at all
+    /// (`.git`/`.ssh`/`.gnupg` folders, symlinks pointing outside; see `croc_names`).
+    Delivered { left_out: usize },
     /// Nobody picked it up within the wait limit.
     NoReceiver,
     /// [`SendHandle::cancel`] was called (e.g. replaced by newer copied text).
@@ -211,8 +216,36 @@ fn run_send(
     };
     remove_text_files(&work_dir); // leftovers from a crash
 
+    // Names croc's receiver would refuse → a staged copy with safe names. Kept alive until
+    // croc has exited; dropping it removes the staging folder.
+    let prepared = match job {
+        SendJob::Text(_) => None,
+        SendJob::Files(files) => match croc_names::prepare(files, &work_dir) {
+            Ok(prepared) if prepared.paths.is_empty() => {
+                return SendOutcome::Failed(
+                    "croc can't send .git, .ssh or .gnupg folders, or links pointing outside".into(),
+                );
+            }
+            Ok(prepared) => Some(prepared),
+            Err(err) => return SendOutcome::Failed(format!("couldn\u{2019}t prepare the files: {err}")),
+        },
+    };
+    let left_out = prepared.as_ref().map_or(0, |p| p.left_out);
+    let send_job = match &prepared {
+        Some(prepared) => {
+            if prepared.renamed > 0 || prepared.left_out > 0 {
+                println!(
+                    "[croc-send] {} name(s) made croc-safe, {} item(s) left out",
+                    prepared.renamed, prepared.left_out
+                );
+            }
+            SendJob::Files(prepared.paths.clone())
+        }
+        None => job.clone(),
+    };
+
     let mut cmd = Command::new(&croc);
-    cmd.args(croc_args(job, mode))
+    cmd.args(croc_args(&send_job, mode))
         .current_dir(&work_dir)
         .env("CROC_SECRET", code)
         .env_remove("CROC_RELAY")
@@ -254,7 +287,7 @@ fn run_send(
         }
         if let Some(status) = try_wait() {
             break if status.success() {
-                SendOutcome::Delivered
+                SendOutcome::Delivered { left_out }
             } else {
                 SendOutcome::Failed(format!("croc exited with {status}"))
             };
@@ -294,6 +327,7 @@ fn run_send(
         other => other,
     };
     remove_text_files(&work_dir); // a killed `croc send --text` leaves the text here
+    drop(prepared); // croc has exited: remove the staging folder
     if receiver::debug_enabled() {
         eprintln!("[croc-send]   → {outcome:?} ({status:?})");
     }
@@ -360,12 +394,12 @@ fn watch_sender_stderr(mut stderr: impl Read, signals: mpsc::Sender<SenderSignal
 
 /// User-facing reason for a failed send, from croc's stdout.
 fn explain_failure(stdout_text: &str) -> String {
-    // The receiving croc answered "Receive these files? (Y/n)" with no. Without `--yes`
-    // and without a terminal to ask in, croc always does that. Kopico's receiver passes
-    // `--yes`; text is never asked about, which is why only files hit this.
+    // croc sends "refusing files" for *any* error on the receiving side: a declined
+    // "Accept …? (Y/n)" (a receiver without --yes and no terminal declines), a name it
+    // won't create (Kopico avoids those, see croc_names), a full disk, …
     if stdout_text.contains("refusing files") {
-        return "the receiver declined the files. A croc receiver needs --yes to accept \
-                files automatically (Kopico does this)"
+        return "the receiver rejected the transfer \u{2014} its croc output shows why. \
+                A croc receiver also needs --yes to accept files"
             .into();
     }
     stdout_text.lines().last().unwrap_or(stdout_text).to_owned()
@@ -407,8 +441,8 @@ mod tests {
 
     #[test]
     fn explains_refused_files() {
-        // Exact croc 11.5.4 output when the receiver runs without --yes
-        assert!(explain_failure("peer error: refusing files").contains("--yes"));
+        // Exact croc 11.5.4 output when the receiver errors or runs without --yes
+        assert!(explain_failure("peer error: refusing files").contains("rejected"));
         assert_eq!(explain_failure("first\ncould not connect to x: y"), "could not connect to x: y");
     }
 
@@ -458,7 +492,7 @@ mod tests {
         let text = "line one\n  \"quoted\" $HOME ü€\n";
         let code = format!("kopico-send-e2e-{}", std::process::id());
         let (outcome, received) = send_and_receive(SendJob::Text(text.into()), &code, &out);
-        assert_eq!(outcome, SendOutcome::Delivered);
+        assert_eq!(outcome, SendOutcome::Delivered { left_out: 0 });
         assert_eq!(received, text, "receiver gets the text byte for byte");
     }
 
@@ -472,12 +506,16 @@ mod tests {
         std::fs::create_dir_all(&out).unwrap();
         std::fs::write(src.join("a.txt"), "aaa").unwrap();
         std::fs::write(src.join("b file.txt"), "bbb").unwrap();
-        let job = SendJob::Files(vec![src.join("a.txt"), src.join("b file.txt")]);
+        // macOS screenshot style (U+202F before AM): croc's receiver refuses this name
+        std::fs::write(src.join("Shot 10.15\u{202f}AM.png"), "png").unwrap();
+        let job = SendJob::Files(vec![src.join("a.txt"), src.join("b file.txt"), src.join("Shot 10.15\u{202f}AM.png")]);
         let code = format!("kopico-send-files-e2e-{}", std::process::id());
         let (outcome, _) = send_and_receive(job, &code, &out);
-        assert_eq!(outcome, SendOutcome::Delivered);
+        assert_eq!(outcome, SendOutcome::Delivered { left_out: 0 });
         assert_eq!(std::fs::read_to_string(out.join("a.txt")).unwrap(), "aaa");
         assert_eq!(std::fs::read_to_string(out.join("b file.txt")).unwrap(), "bbb");
+        assert_eq!(std::fs::read_to_string(out.join("Shot 10.15 AM.png")).unwrap(), "png");
+        assert!(src.join("Shot 10.15\u{202f}AM.png").exists(), "original untouched");
     }
 
     #[test]

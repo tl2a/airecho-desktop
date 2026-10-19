@@ -182,7 +182,7 @@ doesn't see its own discovery broadcast. Test it with two devices on the same ne
 | No tray icon on GNOME | Install the AppIndicator extension |
 | `croc is not installed or not on PATH` toast | Install croc, or put it in one of the folders listed in the README |
 | Copied text isn't sent | Kopico on? Advanced → *Send Copied Text* on? Password-manager copies are skipped by design. GNOME/Wayland: only while Kopico is focused |
-| "the receiver declined the files" (croc: `peer error: refusing files`) | The receiving croc runs without `--yes` and has no terminal to ask in, so it answers "Receive these files?" with no. Add `--yes` there (Kopico's receiver already does). Text is never asked about |
+| "the receiver rejected the transfer" (croc: `peer error: refusing files`) | croc sends this for **any** error on the receiving side — its own output says which. Usual causes: a file name croc won't create (Kopico renames those, see [sending.md](sending.md#file-names-croc-refuses)), or a receiver without `--yes` and no terminal (it declines). Text is never affected |
 | "Not delivered: nobody picked up …" | The other side isn't receiving with the same code/mode — or (Local mode) can't reach this machine; give it this machine's IP as *Sender IP* |
 | No *Send with Kopico* in Finder | Start Kopico once with `cargo run` (registers the service), then check System Settings → Keyboard → Keyboard Shortcuts → Services → Files and Folders |
 | No *Send with Kopico* in Files (Nautilus) | Install `nautilus-python`, run `./dev-install.sh`, then `nautilus -q` |

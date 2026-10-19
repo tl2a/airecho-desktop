@@ -188,6 +188,7 @@ src/main.rs           app setup, actions (= app state), window, clipboard
 src/transfers.rs      coordinates receiving and sending (one croc code)
 src/receiver.rs       croc receive loop (background thread)
 src/sender.rs         croc send (text, files)
+src/croc_names.rs     send files under names croc accepts (e.g. macOS screenshots)
 src/clipboard.rs      write received text, watch copied text
 src/macos_services.rs Finder "Send with Kopico" (macOS Services)
 src/tray.rs           tray icon and menu

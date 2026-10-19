@@ -87,6 +87,7 @@ Do **not** mix `gtk4::Widget` and `adw::gtk::Widget` for the same type.
 | `src/main.rs` | App entry, app actions, window + signal handlers | ✅ Yes |
 | `src/transfers.rs` | Receive/send coordination — the only place that starts/stops croc | ✅ Yes |
 | `src/sender.rs` | croc send (text, files) | ✅ Yes — see `docs/sending.md` |
+| `src/croc_names.rs` | File names croc's receiver accepts; stages unsafe ones | ✅ Yes |
 | `src/clipboard.rs` | Clipboard write + watch | ✅ Yes |
 | `src/macos_services.rs` | macOS Finder *Send with Kopico* | ✅ Rarely |
 | `data/linux/` | Nautilus / Dolphin *Send with Kopico* | ✅ Yes |

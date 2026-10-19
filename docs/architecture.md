@@ -29,6 +29,7 @@ How Kopico Desktop is put together. For the croc side in detail see
 | `src/transfers.rs` | Receive/send coordination: pause receiving, send queue, no echo |
 | `src/receiver.rs` | The croc receive loop on a background thread; parses croc's output |
 | `src/sender.rs` | One `croc send` (text or files) on a background thread |
+| `src/croc_names.rs` | Sends files whose names croc refuses under safe names (staged hard links) |
 | `src/clipboard.rs` | Write received text; watch for text the user copies |
 | `src/macos_services.rs` | Finder → Services → *Send with Kopico* (macOS) |
 | `src/tray.rs` | Tray / menu bar icon and menu |
