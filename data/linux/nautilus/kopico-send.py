@@ -12,10 +12,6 @@ import subprocess
 
 import gi
 
-try:
-    gi.require_version("Nautilus", "4.0")  # Nautilus 43+
-except ValueError:
-    gi.require_version("Nautilus", "3.0")
 from gi.repository import GObject, Nautilus
 
 KOPICO = "@KOPICO_BIN@"

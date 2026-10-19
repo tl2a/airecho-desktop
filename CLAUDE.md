@@ -64,6 +64,7 @@ kopico-desktop/
     ├── macos/Info.plist                        # macOS bundle: NSServices, CFBundleDocumentTypes
     ├── linux/nautilus/kopico-send.py           # Nautilus "Send with Kopico" (dev-install.sh)
     ├── linux/kio/kopico-send.desktop           # Dolphin "Send with Kopico" (dev-install.sh)
+    ├── linux/nemo/kopico-send.nemo_action      # Nemo "Send with Kopico" (dev-install.sh)
     ├── in.tl2a.kopico-desktop.gresource.xml   # GResource manifest
     ├── style.css                               # App CSS (auto-loaded by AdwApplication)
     └── ui/
@@ -439,7 +440,7 @@ machine (croc doesn't see its own multicast) — use two devices on the same net
 
 - Triggers: clipboard copy (`clipboard::watch` → `Transfers::on_text_copied`, needs
   `app.enabled` + `app.send-clipboard`), and files via `app.connect_open` (Finder Services
-  / Open With, Nautilus/Dolphin, `kopico-desktop <files>`) or `app.send-files`.
+  / Open With, Linux file-manager actions, `kopico-desktop <files>`) or `app.send-files`.
 - `Transfers` owns the receiver: **stop receiving before a send** (same code → we'd receive
   ourselves), but wait while `ReceiverHandle::is_busy()`; one `SendHandle` at a time;
   `pump()` resumes receiving when the queue is empty. Newer text replaces waiting text;

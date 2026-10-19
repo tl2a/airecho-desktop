@@ -19,8 +19,8 @@ It is a GNOME-style app (GTK 4 + libadwaita, written in Rust) that runs on **Lin
 - **Sends what you copy.** Copy text anywhere and Kopico sends it (switch off in Advanced →
   *Send Copied Text*). Copies that password managers mark as private are never sent.
 - **Sends files** from the right-click menu: Finder → *Send with Kopico* (Services /
-  Quick Actions) or *Open With → Kopico Desktop*; Files (Nautilus) and Dolphin →
-  *Send with Kopico*; or Advanced → *Send Files…*.
+  Quick Actions) or *Open With → Kopico Desktop*; Nautilus, Dolphin, Nemo, and Thunar
+  can use *Send with Kopico* after `./dev-install.sh`; or Advanced → *Send Files…*.
 - **Lives in the tray / menu bar.** Closing the window hides it; the tray icon turns
   green while Kopico is on. Tray menu: *Enable*, *Settings*, *Quit*.
 - **Notifies you** when files or text arrive, and when Kopico is switched on.
@@ -175,7 +175,7 @@ The short version — each one is explained in
 - Copied text is passed to croc as a command-line argument, so other users on the same
   machine could see it in the process list while it is being sent.
 - On GNOME (Wayland), copies are only noticed while Kopico's window is focused.
-- The Linux *Send with Kopico* entries (Nautilus, Dolphin) are untested so far.
+- The Linux file-manager *Send with Kopico* actions are not tested on every file manager.
 - macOS release builds would need a real Apple Developer signature instead of the ad-hoc
   development one.
 - `meson.build` still asks for GTK ≥ 4.14 / libadwaita ≥ 1.6 although the code needs
@@ -196,7 +196,7 @@ src/notification.rs   system notifications (Linux: gio, macOS: notify-rust)
 data/ui/window.blp    UI (Blueprint)
 data/style.css        app CSS
 data/macos/           macOS bundle metadata (Info.plist: Services, Open With)
-data/linux/           Nautilus extension and Dolphin menu ("Send with Kopico")
+data/linux/           File-manager integrations ("Send with Kopico")
 scripts/macos-app.sh  builds, signs and runs Kopico Desktop.app (macOS `cargo run` runner)
 dev-install.sh        registers the dev build for notifications (Linux and macOS)
 docs/                 deeper documentation

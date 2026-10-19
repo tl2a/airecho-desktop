@@ -11,8 +11,7 @@ How Kopico sends copied text and files with croc. Code: `src/transfers.rs` (coor
 | You **copy text** anywhere | `croc send --text "<text>"` | Kopico on + Advanced → *Send Copied Text* on (default) |
 | Finder → right-click → **Send with Kopico** (Services / Quick Actions) | `croc send <files>` | macOS, Kopico started from its bundle |
 | Finder → right-click → **Open With → Kopico Desktop** | `croc send <files>` | macOS |
-| Files / Nautilus → right-click → **Send with Kopico** | `croc send <files>` | Linux, `nautilus-python`, `./dev-install.sh` |
-| Dolphin → right-click → **Send with Kopico** | `croc send <files>` | Linux/KDE, `./dev-install.sh` |
+| Nautilus, Dolphin, Nemo, or Thunar → right-click → **Send with Kopico** | `croc send <files>` | Linux; `nautilus-python` for Nautilus; `./dev-install.sh` |
 | `kopico-desktop <files>` | `croc send <files>` | Linux (macOS: starts a second Kopico — use Finder) |
 | Advanced → **Send Files…** | `croc send <files>` | — |
 

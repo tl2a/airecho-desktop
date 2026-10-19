@@ -58,6 +58,8 @@ pub fn copy_to_clipboard(text: &str) {
 
 #[cfg(not(target_os = "macos"))]
 fn copy_with_gdk(text: &str) {
+    use gtk4::prelude::*;
+
     match gtk4::gdk::Display::default() {
         Some(display) => display.clipboard().set_text(text),
         None => eprintln!("[receiver] no display — text not copied to the clipboard"),

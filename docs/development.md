@@ -49,8 +49,11 @@ cargo run
 GNOME Shell only shows notifications for apps it has a `.desktop` file for. It also
 installs the *Send with Kopico* right-click entries: a Nautilus extension in
 `~/.local/share/nautilus-python/extensions/` (needs `nautilus-python` /
-`python3-nautilus`; restart Files with `nautilus -q`) and a Dolphin service menu in
-`~/.local/share/kio/servicemenus/`.
+`python3-nautilus`; restart Files with `nautilus -q`), a Dolphin service menu in
+`~/.local/share/kio/servicemenus/`, a Nemo action in `~/.local/share/nemo/actions/`,
+and a Thunar custom action merged into `~/.config/Thunar/uca.xml`. Restart each file
+manager after installation; KDE's service-menu cache is refreshed when available.
+The Thunar installer preserves the other custom actions in `uca.xml`.
 
 Optional:
 
@@ -185,4 +188,7 @@ doesn't see its own discovery broadcast. Test it with two devices on the same ne
 | "the receiver rejected the transfer" (croc: `peer error: refusing files`) | croc sends this for **any** error on the receiving side — its own output says which. Usual causes: a file name croc won't create (Kopico renames those, see [sending.md](sending.md#file-names-croc-refuses)), or a receiver without `--yes` and no terminal (it declines). Text is never affected |
 | "Not delivered: nobody picked up …" | The other side isn't receiving with the same code/mode — or (Local mode) can't reach this machine; give it this machine's IP as *Sender IP* |
 | No *Send with Kopico* in Finder | Start Kopico once with `cargo run` (registers the service), then check System Settings → Keyboard → Keyboard Shortcuts → Services → Files and Folders |
-| No *Send with Kopico* in Files (Nautilus) | Install `nautilus-python`, run `./dev-install.sh`, then `nautilus -q` |
+| No *Send with Kopico* in Nautilus | Install `nautilus-python` (Fedora) or `python3-nautilus` (Debian/Ubuntu), run `./dev-install.sh`, then restart Nautilus with `nautilus -q` |
+| No *Send with Kopico* in Nemo | Run `./dev-install.sh`, then restart Nemo with `nemo -q` |
+| No *Send with Kopico* in Thunar | Run `./dev-install.sh`, then restart Thunar with `thunar -q`; check `~/.config/Thunar/uca.xml` for the Kopico action |
+| No *Send with Kopico* in Dolphin | Run `./dev-install.sh`; if it still does not appear, restart Dolphin or log out and back in |

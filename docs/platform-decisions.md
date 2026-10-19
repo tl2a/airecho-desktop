@@ -176,9 +176,10 @@ Files must therefore come through LaunchServices (Finder), which targets the run
 
 **Linux.** No standard "send" menu across file managers. **Decision:** the `.desktop` file
 takes files (`Exec=kopico-desktop %F`) for *Open With*, plus *Send with Kopico* entries for
-Nautilus (a `nautilus-python` extension) and Dolphin (a KDE service menu), installed by
-`dev-install.sh`. They run `kopico-desktop <files>`; GApplication (`HANDLES_OPEN`) forwards
-them to the running instance over D-Bus. Untested so far.
+Nautilus (a `nautilus-python` extension), Dolphin (a KDE service menu), Nemo (an action),
+and Thunar (a custom action), installed by `dev-install.sh`. They run
+`kopico-desktop <files>`; GApplication (`HANDLES_OPEN`) forwards them to the running
+instance over D-Bus.
 
 ## macOS: GTK libraries
 

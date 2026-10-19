@@ -4,7 +4,7 @@
 #
 #   Linux: installs the .desktop file to ~/.local/share/applications/ (gio::Notification
 #          needs it) and the "Send with Kopico" right-click entries for Nautilus
-#          (nautilus-python) and Dolphin.
+#          (nautilus-python), Dolphin, Nemo, and Thunar.
 #   macOS: creates "~/Applications/Kopico Desktop.app" (signed bundle with the debug
 #          binary) — UNUserNotificationCenter only works for a signed app bundle.
 #          `cargo run` refreshes it automatically (scripts/macos-app.sh).
@@ -31,19 +31,101 @@ install_linux() {
     echo "Installed: $dest"
     echo "  Exec= → $BINARY %F"
 
-    # Right-click → "Send with Kopico" in Nautilus (needs nautilus-python) and Dolphin
+    # Right-click → "Send with Kopico" in Nautilus (needs nautilus-python)
     local nautilus_dir="$HOME/.local/share/nautilus-python/extensions"
     mkdir -p "$nautilus_dir"
     sed "s|@KOPICO_BIN@|$BINARY|" "$REPO_ROOT/data/linux/nautilus/kopico-send.py" \
         > "$nautilus_dir/kopico-send.py"
-    echo "Installed: $nautilus_dir/kopico-send.py (restart Nautilus: nautilus -q)"
+    echo "Installed: $nautilus_dir/kopico-send.py"
+    if command -v rpm &>/dev/null; then
+        if rpm -q nautilus-python &>/dev/null; then
+            nautilus_python_installed=true
+        else
+            nautilus_python_installed=false
+        fi
+    elif command -v dpkg-query &>/dev/null; then
+        if dpkg-query -W -f='${Status}' python3-nautilus 2>/dev/null | grep -q 'install ok installed'; then
+            nautilus_python_installed=true
+        else
+            nautilus_python_installed=false
+        fi
+    else
+        nautilus_python_installed=false
+    fi
+    if [ "$nautilus_python_installed" != true ]; then
+        echo "  Nautilus requires nautilus-python (Fedora) or python3-nautilus (Debian/Ubuntu)."
+    fi
 
+    # Dolphin service menu
     local kio_dir="$HOME/.local/share/kio/servicemenus"
     mkdir -p "$kio_dir"
     sed "s|@KOPICO_BIN@|$BINARY|" "$REPO_ROOT/data/linux/kio/kopico-send.desktop" \
         > "$kio_dir/kopico-send.desktop"
     chmod +x "$kio_dir/kopico-send.desktop" # KDE only loads executable service menus
     echo "Installed: $kio_dir/kopico-send.desktop"
+
+    # Nemo action
+    local nemo_dir="$HOME/.local/share/nemo/actions"
+    mkdir -p "$nemo_dir"
+    sed "s|@KOPICO_BIN@|$BINARY|" "$REPO_ROOT/data/linux/nemo/kopico-send.nemo_action" \
+        > "$nemo_dir/kopico-send.nemo_action"
+    echo "Installed: $nemo_dir/kopico-send.nemo_action"
+
+    # Thunar custom action. Merge into the user's existing UCA config rather than
+    # replacing their other custom actions.
+    local thunar_config="$HOME/.config/Thunar/uca.xml"
+    mkdir -p "$(dirname "$thunar_config")"
+    KOPICO_BIN="$BINARY" python3 - "$thunar_config" <<'PY'
+import os
+import shlex
+import sys
+import xml.etree.ElementTree as ET
+
+config = sys.argv[1]
+parser = ET.XMLParser(target=ET.TreeBuilder(insert_comments=True))
+if os.path.exists(config):
+    tree = ET.parse(config, parser=parser)
+    root = tree.getroot()
+    if root.tag != "actions":
+        raise SystemExit(f"Unexpected Thunar custom-action root in {config}: {root.tag}")
+else:
+    root = ET.Element("actions")
+    tree = ET.ElementTree(root)
+
+action = ET.Element("action")
+for tag, text in (
+    ("icon", "document-send"),
+    ("name", "Send with Kopico"),
+    ("unique-id", "kopico-desktop-send"),
+    ("command", f"{shlex.quote(os.environ['KOPICO_BIN'])} %F"),
+    ("description", "Send selected files with Kopico"),
+):
+    ET.SubElement(action, tag).text = text
+range_element = ET.SubElement(action, "range")
+ET.SubElement(range_element, "file")
+ET.SubElement(range_element, "directory")
+ET.SubElement(action, "patterns").text = "*"
+ET.SubElement(action, "startup-notify")
+
+for index, existing in enumerate(root.findall("action")):
+    if existing.findtext("unique-id") == "kopico-desktop-send":
+        root.remove(existing)
+        root.insert(index, action)
+        break
+else:
+    root.append(action)
+
+ET.indent(tree, space=" ")
+tree.write(config, encoding="UTF-8", xml_declaration=True)
+PY
+    echo "Installed: $thunar_config"
+
+    echo "Restart Nautilus (nautilus -q), Nemo (nemo -q), and Thunar to load new actions."
+    if command -v kbuildsycoca6 &>/dev/null; then
+        kbuildsycoca6 --noincremental
+    elif command -v kbuildsycoca5 &>/dev/null; then
+        kbuildsycoca5 --noincremental
+    fi
 
     # Refresh the GNOME app database so GAppInfo picks up the new entry immediately
     if command -v update-desktop-database &>/dev/null; then

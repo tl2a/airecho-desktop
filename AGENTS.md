@@ -90,7 +90,7 @@ Do **not** mix `gtk4::Widget` and `adw::gtk::Widget` for the same type.
 | `src/croc_names.rs` | File names croc's receiver accepts; stages unsafe ones | ✅ Yes |
 | `src/clipboard.rs` | Clipboard write + watch | ✅ Yes |
 | `src/macos_services.rs` | macOS Finder *Send with Kopico* | ✅ Rarely |
-| `data/linux/` | Nautilus / Dolphin *Send with Kopico* | ✅ Yes |
+| `data/linux/` | Linux file-manager *Send with Kopico* actions | ✅ Yes |
 | `src/receiver.rs` | croc receive loop (background thread, polling) | ✅ Yes — see CLAUDE.md “Receiving Files” first |
 | `src/tray.rs` | System tray icon + menu → `app.*` actions | ✅ Yes |
 | `src/notification.rs` | System notifications — gio on Linux, notify-rust on macOS | ✅ Yes |
@@ -169,4 +169,3 @@ Adw.ApplicationWindow window {
 | Boolean | `visible: true;` |
 | Enum | `halign: center;` |
 | Object ref | `title-widget: Adw.WindowTitle { … };` |
-

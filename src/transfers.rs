@@ -182,7 +182,7 @@ impl Transfers {
         self.pump();
     }
 
-    /// Send files/folders (Finder "Send with Kopico" / "Open With", Nautilus, Send Files…).
+    /// Send files/folders (Finder, Linux file-manager actions, Send Files…).
     /// Works even while Kopico is switched off — it's an explicit request.
     pub fn send_files(&self, files: Vec<PathBuf>) {
         let Some(app) = self.app() else { return };

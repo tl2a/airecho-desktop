@@ -62,8 +62,8 @@ fn main() -> gtk4::glib::ExitCode {
         app.connect_startup(move |app| setup_app(app, &transfers));
     }
     app.connect_activate(show_window);
-    // Files handed to Kopico — Finder "Send with Kopico" / "Open With", Nautilus/Dolphin
-    // "Send with Kopico", or `kopico-desktop <files>` — are sent, not opened.
+    // Files handed to Kopico — Finder "Send with Kopico" / "Open With", Linux file-manager
+    // actions, or `kopico-desktop <files>` — are sent, not opened.
     app.connect_open(move |_, files, _hint| {
         transfers.send_files(files.iter().filter_map(|f| f.path()).collect());
     });
