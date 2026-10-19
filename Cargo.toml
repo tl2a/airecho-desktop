@@ -21,8 +21,14 @@ async-channel = "2"
 # UTIs ("'text/plain' is not a valid UTI string") and silently copies nothing, so
 # received text goes to NSPasteboard directly. Same versions tray-icon already uses.
 [target.'cfg(target_os = "macos")'.dependencies]
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSPasteboard"] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+    "std", "NSPasteboard", "NSPasteboardItem", "NSApplication", "NSResponder",
+] }
+objc2-foundation = { version = "0.3", default-features = false, features = [
+    "std", "NSString", "NSArray", "NSEnumerator", "NSURL",
+] }
+# Defines the Finder "Send with Kopico" Services provider class (src/macos_services.rs)
+objc2 = "0.6"
 # System notifications on macOS (Linux uses gio::Notification — GLib has no macOS
 # notification backend). `preview-macos-un` = Apple's current UNUserNotificationCenter
 # API instead of the deprecated NSUserNotificationCenter; it needs the app to run from

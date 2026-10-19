@@ -827,6 +827,7 @@ dependencies = [
  "gtk4",
  "libadwaita",
  "notify-rust",
+ "objc2",
  "objc2-app-kit",
  "objc2-foundation",
  "tray-icon",

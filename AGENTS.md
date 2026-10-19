@@ -85,6 +85,11 @@ Do **not** mix `gtk4::Widget` and `adw::gtk::Widget` for the same type.
 |---|---|---|
 | `README.md`, `docs/*.md` | Human docs — keep in sync with behaviour changes | ✅ Yes |
 | `src/main.rs` | App entry, app actions, window + signal handlers | ✅ Yes |
+| `src/transfers.rs` | Receive/send coordination — the only place that starts/stops croc | ✅ Yes |
+| `src/sender.rs` | croc send (text, files) | ✅ Yes — see `docs/sending.md` |
+| `src/clipboard.rs` | Clipboard write + watch | ✅ Yes |
+| `src/macos_services.rs` | macOS Finder *Send with Kopico* | ✅ Rarely |
+| `data/linux/` | Nautilus / Dolphin *Send with Kopico* | ✅ Yes |
 | `src/receiver.rs` | croc receive loop (background thread, polling) | ✅ Yes — see CLAUDE.md “Receiving Files” first |
 | `src/tray.rs` | System tray icon + menu → `app.*` actions | ✅ Yes |
 | `src/notification.rs` | System notifications — gio on Linux, notify-rust on macOS | ✅ Yes |

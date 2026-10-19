@@ -73,7 +73,7 @@ const BACKOFF_RATE_LIMITED: Duration = Duration::from_secs(60);
 const TICK: Duration = Duration::from_millis(200);
 
 /// `KOPICO_DEBUG=1` logs every croc run (command, exit status, output, outcome).
-fn debug_enabled() -> bool {
+pub(crate) fn debug_enabled() -> bool {
     static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ENABLED.get_or_init(|| std::env::var_os("KOPICO_DEBUG").is_some_and(|v| v != "0"))
 }
@@ -125,6 +125,9 @@ pub enum ReceiverEvent {
 /// and kills any croc process still running.
 pub struct ReceiverHandle {
     running: Arc<AtomicBool>,
+    /// True while croc is talking to a sender (from "authenticating code…" to the end
+    /// of that run) — stopping then would cut off an incoming transfer.
+    busy: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -138,13 +141,14 @@ impl ReceiverHandle {
         on_event: impl Fn(ReceiverEvent) + 'static,
     ) -> Self {
         let running = Arc::new(AtomicBool::new(true));
+        let busy = Arc::new(AtomicBool::new(false));
         let (tx, rx) = async_channel::unbounded::<ReceiverEvent>();
 
         let thread = {
-            let running = running.clone();
+            let (running, busy) = (running.clone(), busy.clone());
             std::thread::Builder::new()
                 .name("croc-receive".into())
-                .spawn(move || receive_loop(&running, &mode, &out_dir, &code, &tx))
+                .spawn(move || receive_loop(&running, &busy, &mode, &out_dir, &code, &tx))
                 .expect("failed to spawn croc-receive thread")
         };
 
@@ -155,7 +159,12 @@ impl ReceiverHandle {
             }
         });
 
-        Self { running, thread: Some(thread) }
+        Self { running, busy, thread: Some(thread) }
+    }
+
+    /// Whether a transfer is coming in right now (see the `busy` field).
+    pub fn is_busy(&self) -> bool {
+        self.busy.load(Ordering::Relaxed)
     }
 
     /// Stop the loop and wait for it. Returns within about [`TICK`]: the loop kills a
@@ -195,6 +204,7 @@ pub fn display_path(path: &Path) -> String {
 
 fn receive_loop(
     running: &AtomicBool,
+    busy: &AtomicBool,
     mode: &RelayMode,
     out_dir: &Path,
     code: &str,
@@ -217,7 +227,7 @@ fn receive_loop(
         let before = list_dir(out_dir);
 
         // Interval counts from the start of the run; a back-off counts from now
-        let next_run = match run_croc(&croc, running, mode, out_dir, code) {
+        let next_run = match run_croc_tracked(&croc, running, Some(busy), mode, out_dir, code) {
             Ok(Outcome::Received) => {
                 let after = list_dir(out_dir);
                 let mut new: Vec<String> = after.difference(&before).cloned().collect();
@@ -269,7 +279,8 @@ enum Signal {
     RateLimited,
 }
 
-/// One croc receive attempt.
+/// One croc receive attempt (tests; the loop uses [`run_croc_tracked`]).
+#[cfg(test)]
 fn run_croc(
     croc: &Path,
     running: &AtomicBool,
@@ -277,6 +288,23 @@ fn run_croc(
     out_dir: &Path,
     code: &str,
 ) -> std::io::Result<Outcome> {
+    run_croc_tracked(croc, running, None, mode, out_dir, code)
+}
+
+/// [`run_croc`], also flagging `busy` while a sender is connected.
+fn run_croc_tracked(
+    croc: &Path,
+    running: &AtomicBool,
+    busy: Option<&AtomicBool>,
+    mode: &RelayMode,
+    out_dir: &Path,
+    code: &str,
+) -> std::io::Result<Outcome> {
+    let set_busy = |value: bool| {
+        if let Some(busy) = busy {
+            busy.store(value, Ordering::Relaxed);
+        }
+    };
     let mut cmd = Command::new(croc);
     cmd.args(["--yes", "--ignore-stdin", "--rename", "--out"])
         .arg(out_dir)
@@ -342,7 +370,10 @@ fn run_croc(
             break finished(status, sender_found);
         }
         match signals.recv_timeout(TICK) {
-            Ok(Signal::SenderFound) => sender_found = true,
+            Ok(Signal::SenderFound) => {
+                sender_found = true;
+                set_busy(true);
+            }
             Ok(Signal::RateLimited) => break Outcome::RateLimited,
             Err(_) if !sender_found && Instant::now() >= deadline => break Outcome::NoSender,
             Err(mpsc::RecvTimeoutError::Timeout) => {}
@@ -353,6 +384,7 @@ fn run_croc(
 
     // No-op if croc already exited; otherwise stops a waiting/rate-limited/stopped run
     let _ = child.kill();
+    set_busy(false);
     let status = child.wait();
     let stderr_lines = stderr_reader.join().unwrap_or_default();
     let stdout_text = stdout_reader.join().unwrap_or_default();
@@ -468,7 +500,7 @@ fn is_sender_found(segment: &str) -> bool {
 /// stderr: "The relay is rate limiting reconnects; retrying in …"
 /// stdout: "could not connect to host:port: relay admission rate limited"
 /// Deliberately narrow: a file name or size like "(429 MB)" must not match.
-fn is_rate_limited(segment: &str) -> bool {
+pub(crate) fn is_rate_limited(segment: &str) -> bool {
     segment.to_ascii_lowercase().contains("rate limit")
 }
 
@@ -485,7 +517,7 @@ pub fn is_valid_sender_ip(value: &str) -> bool {
         && !value.contains('/')
 }
 
-fn read_all(mut stream: impl Read) -> String {
+pub(crate) fn read_all(mut stream: impl Read) -> String {
     let mut bytes = Vec::new();
     let _ = stream.read_to_end(&mut bytes);
     String::from_utf8_lossy(&bytes).into_owned()
@@ -506,7 +538,7 @@ fn list_dir(dir: &Path) -> HashSet<String> {
 
 /// croc on `$PATH`, or in the usual install locations. Apps started from Finder or
 /// a desktop launcher often get a minimal `$PATH` without `/usr/local/bin` etc.
-fn find_croc() -> Option<PathBuf> {
+pub(crate) fn find_croc() -> Option<PathBuf> {
     let home = dirs_next::home_dir().unwrap_or_default();
     let path = std::env::var_os("PATH").unwrap_or_else(OsString::new);
     std::env::split_paths(&path)
@@ -630,7 +662,8 @@ mod tests {
         let RelayMode::OwnRelay { address, .. } = &mode else { unreachable!() };
         let _sender = KillOnDrop(
             Command::new(croc())
-                .args(["--yes", "--ignore-stdin", "--relay", address, "send"])
+                .args(["--yes", "--ignore-stdin", "--disable-clipboard", "--relay", address, "send"])
+                .current_dir(std::env::temp_dir())
                 .arg(src.join("hello kopico.txt"))
                 .env("CROC_SECRET", &code)
                 .stdin(Stdio::null())
@@ -644,7 +677,9 @@ mod tests {
         let (tx, rx) = async_channel::unbounded();
         let loop_thread = {
             let (running, out, code) = (running.clone(), out.clone(), code.clone());
-            std::thread::spawn(move || receive_loop(&running, &mode, &out, &code, &tx))
+            std::thread::spawn(move || {
+                receive_loop(&running, &AtomicBool::new(false), &mode, &out, &code, &tx)
+            })
         };
         // Watchdog: give up after 60 s instead of hanging the test
         {
@@ -676,7 +711,8 @@ mod tests {
 
         // A plain `croc send` runs its own relay on port 9009 — that's what --ip reaches
         let mut sender = Command::new(croc())
-            .args(["--yes", "--ignore-stdin", "send"])
+            .args(["--yes", "--ignore-stdin", "--disable-clipboard", "send"])
+            .current_dir(std::env::temp_dir())
             .arg(src.join("via ip.txt"))
             .env("CROC_SECRET", &code)
             .stdin(Stdio::null())
@@ -722,7 +758,8 @@ mod tests {
         let code = format!("kopico-text-e2e-{}", std::process::id());
 
         let mut sender = Command::new(croc())
-            .args(["--yes", "--ignore-stdin", "send", "--text", text])
+            .args(["--yes", "--ignore-stdin", "--disable-clipboard", "send", "--text", text])
+            .current_dir(std::env::temp_dir())
             .env("CROC_SECRET", &code)
             .stdin(Stdio::null())
             .stdout(Stdio::null())

@@ -9,11 +9,17 @@ use adw::{
 use adw::gtk::Label;
 use gtk4::{gio, glib};
 
+mod clipboard;
 mod notification;
 mod receiver;
+mod sender;
 mod tray;
+mod transfers;
+#[cfg(target_os = "macos")]
+mod macos_services;
 
-use receiver::{ReceiverEvent, ReceiverHandle, RelayMode};
+use receiver::RelayMode;
+use transfers::Transfers;
 use tray::{ACTION_ENABLED, ACTION_QUIT, ACTION_SHOW_WINDOW, ACTION_TRAY, Tray};
 
 const APP_ID: &str = "in.tl2a.kopico-desktop";
@@ -31,6 +37,10 @@ const ACTION_RELAY_PASSWORD: &str = "relay-password";
 const ACTION_RECEIVE_CODE: &str = "receive-code";
 /// Optional, Local mode only: `--ip` for when multicast discovery doesn't work.
 const ACTION_SENDER_IP: &str = "sender-ip";
+/// Bool, default on: send text whenever the user copies some (Advanced → Send).
+const ACTION_SEND_CLIPBOARD: &str = "send-clipboard";
+/// Opens a file chooser and sends the chosen files (Advanced → Send Files…).
+const ACTION_SEND_FILES: &str = "send-files";
 
 /// `app.relay-mode` values, in the same order as the Relay Mode combo row.
 const RELAY_MODES: [&str; 3] = ["local", "own-relay", "public-relay"];
@@ -41,9 +51,21 @@ fn main() -> gtk4::glib::ExitCode {
         .expect("Failed to load gresource data");
     gio::resources_register(&resource);
 
-    let app = Application::builder().application_id(APP_ID).build();
-    app.connect_startup(setup_app);
+    let app = Application::builder()
+        .application_id(APP_ID)
+        .flags(gio::ApplicationFlags::HANDLES_OPEN)
+        .build();
+    let transfers = Transfers::new(&app);
+    {
+        let transfers = transfers.clone();
+        app.connect_startup(move |app| setup_app(app, &transfers));
+    }
     app.connect_activate(show_window);
+    // Files handed to Kopico — Finder "Send with Kopico" / "Open With", Nautilus/Dolphin
+    // "Send with Kopico", or `kopico-desktop <files>` — are sent, not opened.
+    app.connect_open(move |_, files, _hint| {
+        transfers.send_files(files.iter().filter_map(|f| f.path()).collect());
+    });
     app.run()
 }
 
@@ -82,69 +104,6 @@ fn receiver_config(app: &Application) -> Result<(RelayMode, String), String> {
     Ok((mode, action_string(app, ACTION_RECEIVE_CODE)))
 }
 
-// ── Receiver state ─────────────────────────────────────────────────────────────
-
-/// The croc receive loop; runs while `app.enabled` is on. Its configuration comes
-/// from the receiver setting actions, so (re)starting always picks up the latest.
-#[derive(Default)]
-struct ReceiverState {
-    handle: Option<ReceiverHandle>,
-}
-
-impl ReceiverState {
-    fn start(&mut self, app: &Application) {
-        if self.handle.is_some() {
-            return;
-        }
-        let (mode, code) = match receiver_config(app) {
-            Ok(config) => config,
-            Err(message) => {
-                println!("[receiver] not started: {message}");
-                show_toast(app, &message);
-                return;
-            }
-        };
-        let out_dir = receiver::default_out_dir();
-        println!("[receiver] started ({mode:?}, saving to {})", out_dir.display());
-
-        let app_weak = app.downgrade();
-        let handle = ReceiverHandle::start(mode, out_dir.clone(), code, move |event| {
-            // Runs on the GTK main thread
-            let Some(app) = app_weak.upgrade() else { return };
-            match event {
-                ReceiverEvent::Received(names) => {
-                    let message = received_message(&names, &out_dir);
-                    notification::send_files_received(&app, &message);
-                    show_toast(&app, &message);
-                }
-                ReceiverEvent::Text(text) => {
-                    copy_to_clipboard(&text);
-                    let message = "Received text copied to clipboard";
-                    notification::send_text_received(&app, message);
-                    show_toast(&app, message);
-                }
-                ReceiverEvent::Failed(message) => show_toast(&app, &message),
-            }
-        });
-        self.handle = Some(handle);
-    }
-
-    fn stop(&mut self) {
-        if let Some(handle) = self.handle.take() {
-            handle.stop();
-            println!("[receiver] stopped");
-        }
-    }
-
-    /// Apply new settings — only if the loop is running (Kopico enabled).
-    fn restart(&mut self, app: &Application) {
-        if self.handle.is_some() || action_bool(app, ACTION_ENABLED) {
-            self.stop();
-            self.start(app);
-        }
-    }
-}
-
 /// "“photo.jpg” saved to ~/Downloads/Kopico" / "3 items saved to …".
 fn received_message(names: &[String], out_dir: &std::path::Path) -> String {
     let dir = receiver::display_path(out_dir);
@@ -153,70 +112,6 @@ fn received_message(names: &[String], out_dir: &std::path::Path) -> String {
         [name] => format!("\u{201c}{name}\u{201d} saved to {dir}"),
         _ => format!("{} items saved to {dir}", names.len()),
     }
-}
-
-/// Put `text` on the system clipboard (paste anywhere with Cmd/Ctrl+V).
-///
-/// macOS: written to NSPasteboard directly (stays after Kopico quits) — GTK's macOS
-/// clipboard backend rejects its own MIME types and copies nothing.
-#[cfg(target_os = "macos")]
-fn copy_to_clipboard(text: &str) {
-    use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
-    use objc2_foundation::NSString;
-
-    let pasteboard = NSPasteboard::generalPasteboard();
-    pasteboard.clearContents();
-    // SAFETY: reading an immutable AppKit constant
-    let string_type = unsafe { NSPasteboardTypeString };
-    if !pasteboard.setString_forType(&NSString::from_str(text), string_type) {
-        eprintln!("[receiver] could not copy the received text to the clipboard");
-    }
-}
-
-/// Linux/Wayland: use wl-copy's data-control support so copying works while unfocused
-/// when the compositor supports it. Fall back to GDK when wl-copy is unavailable.
-#[cfg(target_os = "linux")]
-fn copy_to_clipboard(text: &str) {
-    if std::env::var_os("WAYLAND_DISPLAY").is_some() {
-        match copy_with_wl_copy(text) {
-            Ok(()) => return,
-            Err(err) => eprintln!("[receiver] wl-copy failed ({err}); falling back to GDK"),
-        }
-    }
-    copy_with_gdk(text);
-}
-
-/// BSD and other non-macOS platforms: GDK clipboard.
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
-fn copy_to_clipboard(text: &str) {
-    copy_with_gdk(text);
-}
-
-#[cfg(not(target_os = "macos"))]
-fn copy_with_gdk(text: &str) {
-    match gtk4::gdk::Display::default() {
-        Some(display) => display.clipboard().set_text(text),
-        None => eprintln!("[receiver] no display — text not copied to the clipboard"),
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn copy_with_wl_copy(text: &str) -> std::io::Result<()> {
-    use std::{
-        io::{self, Write},
-        process::{Command, Stdio},
-    };
-
-    let mut child = Command::new("wl-copy").stdin(Stdio::piped()).spawn()?;
-    let mut stdin = child.stdin.take().expect("wl-copy stdin is piped");
-    let write_result = stdin.write_all(text.as_bytes());
-    drop(stdin);
-    let status = child.wait()?;
-    write_result?;
-    if !status.success() {
-        return Err(io::Error::other(format!("exited with {status}")));
-    }
-    Ok(())
 }
 
 /// Toast on the main window (if it exists — it may be hidden in the tray).
@@ -252,19 +147,23 @@ fn show_toast_on_window(window: &ApplicationWindow, message: &str) {
 // ── App setup ──────────────────────────────────────────────────────────────────
 
 /// Runs once per process on the primary instance: registers actions, tray, receiver.
-fn setup_app(app: &Application) {
+fn setup_app(app: &Application, transfers: &Transfers) {
     let tray: Rc<RefCell<Option<Tray>>> = Rc::new(RefCell::new(None));
-    let receiver: Rc<RefCell<ReceiverState>> = Rc::default();
     tray::install_menu_handler();
     notification::init(); // macOS: permission prompt on first run
+    #[cfg(target_os = "macos")]
+    macos_services::register(); // Finder → Services → "Send with Kopico"
+    {
+        let transfers = transfers.clone();
+        clipboard::watch(Box::new(move |text| transfers.on_text_copied(text)));
+    }
 
     // ── app.enabled — power toggle + tray checkbox ────────────────────────────
     let enabled_action = gio::SimpleAction::new_stateful(ACTION_ENABLED, None, &true.to_variant());
     {
         let tray = tray.clone();
-        let receiver = receiver.clone();
+        let transfers = transfers.clone();
         let app_notif = app.downgrade();
-        let app_recv = app.downgrade();
 
         enabled_action.connect_change_state(move |action, value| {
             let Some(enabled) = value.and_then(|v| v.get::<bool>()) else { return };
@@ -276,14 +175,8 @@ fn setup_app(app: &Application) {
             }
             println!("Kopico {}", if enabled { "enabled" } else { "disabled" });
 
-            // Start / stop the croc receive loop
-            if let Some(app) = app_recv.upgrade() {
-                if enabled {
-                    receiver.borrow_mut().start(&app);
-                } else {
-                    receiver.borrow_mut().stop();
-                }
-            }
+            // Start / stop the croc receive loop (off also cancels sending copied text)
+            transfers.set_enabled(enabled);
 
             // System notification on actual off→on transition only
             if enabled && !was_enabled {
@@ -349,30 +242,53 @@ fn setup_app(app: &Application) {
     ];
     for (name, default, is_valid) in settings {
         let action = gio::SimpleAction::new_stateful(name, None, &default.to_variant());
-        let receiver = receiver.clone();
-        let app_w = app.downgrade();
+        let transfers = transfers.clone();
         action.connect_change_state(move |action, value| {
-            let (Some(value), Some(app)) = (value.and_then(|v| v.get::<String>()), app_w.upgrade())
-            else { return };
+            let Some(value) = value.and_then(|v| v.get::<String>()) else { return };
             let value = value.trim().to_owned();
             if !is_valid(&value) || action.state().and_then(|s| s.get::<String>()) == Some(value.clone()) {
                 return;
             }
             action.set_state(&value.to_variant());
-            receiver.borrow_mut().restart(&app);
+            transfers.apply_settings();
         });
         app.add_action(&action);
     }
 
-    // Kopico starts enabled → start receiving right away (Local mode by default)
-    if action_bool(app, ACTION_ENABLED) {
-        receiver.borrow_mut().start(app);
-    }
+    // ── app.send-clipboard — send copied text (on by default) ──────────────────
+    app.add_action(&gio::SimpleAction::new_stateful(ACTION_SEND_CLIPBOARD, None, &true.to_variant()));
 
-    app.connect_shutdown(move |_| {
-        tray.borrow_mut().take();
-        receiver.borrow_mut().stop();
-    });
+    // ── app.send-files — pick files in a dialog and send them ─────────────────
+    let send_files_action = gio::SimpleAction::new(ACTION_SEND_FILES, None);
+    {
+        let transfers = transfers.clone();
+        let app_w = app.downgrade();
+        send_files_action.connect_activate(move |_, _| {
+            let Some(app) = app_w.upgrade() else { return };
+            let dialog = adw::gtk::FileDialog::builder().title("Send Files").modal(true).build();
+            let transfers = transfers.clone();
+            dialog.open_multiple(app.active_window().as_ref(), gio::Cancellable::NONE, move |result| {
+                let Ok(files) = result else { return }; // dismissed
+                let paths = files
+                    .iter::<gio::File>()
+                    .filter_map(|f| f.ok().and_then(|f| f.path()))
+                    .collect();
+                transfers.send_files(paths);
+            });
+        });
+    }
+    app.add_action(&send_files_action);
+
+    // Kopico starts enabled → start receiving right away (Local mode by default)
+    transfers.start_receiving();
+
+    {
+        let transfers = transfers.clone();
+        app.connect_shutdown(move |_| {
+            tray.borrow_mut().take();
+            transfers.shutdown(); // no croc left running
+        });
+    }
 }
 
 // ── Window ─────────────────────────────────────────────────────────────────────
@@ -393,6 +309,8 @@ fn build_ui(app: &Application) -> ApplicationWindow {
     let state_title: Label          = builder.object("state_title").expect("state_title");
     let state_description: Label    = builder.object("state_description").expect("state_description");
     let tray_row: SwitchRow         = builder.object("tray_row").expect("tray_row");
+    let send_clipboard_row: SwitchRow =
+        builder.object("send_clipboard_row").expect("send_clipboard_row");
     let relay_mode_row: ComboRow    = builder.object("relay_mode_row").expect("relay_mode_row");
     let relay_address_row: EntryRow = builder.object("relay_address_row").expect("relay_address_row");
     let relay_password_row: PasswordEntryRow =
@@ -485,6 +403,17 @@ fn build_ui(app: &Application) -> ApplicationWindow {
     }
 
     // ── Advanced: tray switch ─────────────────────────────────────────────────
+    // ── Advanced: "Send Copied Text" switch → app.send-clipboard ──────────────
+    send_clipboard_row.set_active(action_bool(app, ACTION_SEND_CLIPBOARD));
+    {
+        let app_w = app.downgrade();
+        send_clipboard_row.connect_active_notify(move |row| {
+            if let Some(app) = app_w.upgrade() {
+                app.change_action_state(ACTION_SEND_CLIPBOARD, &row.is_active().to_variant());
+            }
+        });
+    }
+
     tray_row.set_active(action_bool(app, ACTION_TRAY));
     {
         let app_w = app.downgrade();

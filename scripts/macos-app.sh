@@ -31,6 +31,8 @@ refresh_bundle() {
     # Unsigned apps are refused notification permission; ad-hoc signing is enough
     codesign --force --sign - --identifier "$APP_ID" "$APP" 2>/dev/null
     "$LSREGISTER" -f "$APP"
+    # Re-read NSServices so "Send with Kopico" shows up in Finder's Services menu
+    /System/Library/CoreServices/pbs -update 2>/dev/null || true
 }
 
 case "${1:-}" in

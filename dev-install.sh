@@ -3,7 +3,8 @@
 # system notifications under Kopico's own name.
 #
 #   Linux: installs the .desktop file to ~/.local/share/applications/ (gio::Notification
-#          needs it).
+#          needs it) and the "Send with Kopico" right-click entries for Nautilus
+#          (nautilus-python) and Dolphin.
 #   macOS: creates "~/Applications/Kopico Desktop.app" (signed bundle with the debug
 #          binary) — UNUserNotificationCenter only works for a signed app bundle.
 #          `cargo run` refreshes it automatically (scripts/macos-app.sh).
@@ -25,10 +26,24 @@ install_linux() {
     mkdir -p "$dest_dir"
 
     # Copy the template and patch Exec= to the actual debug binary path
-    sed "s|Exec=.*|Exec=$BINARY|" "$desktop_src" > "$dest"
+    sed "s|^Exec=.*|Exec=$BINARY %F|" "$desktop_src" > "$dest"
 
     echo "Installed: $dest"
-    echo "  Exec= → $BINARY"
+    echo "  Exec= → $BINARY %F"
+
+    # Right-click → "Send with Kopico" in Nautilus (needs nautilus-python) and Dolphin
+    local nautilus_dir="$HOME/.local/share/nautilus-python/extensions"
+    mkdir -p "$nautilus_dir"
+    sed "s|@KOPICO_BIN@|$BINARY|" "$REPO_ROOT/data/linux/nautilus/kopico-send.py" \
+        > "$nautilus_dir/kopico-send.py"
+    echo "Installed: $nautilus_dir/kopico-send.py (restart Nautilus: nautilus -q)"
+
+    local kio_dir="$HOME/.local/share/kio/servicemenus"
+    mkdir -p "$kio_dir"
+    sed "s|@KOPICO_BIN@|$BINARY|" "$REPO_ROOT/data/linux/kio/kopico-send.desktop" \
+        > "$kio_dir/kopico-send.desktop"
+    chmod +x "$kio_dir/kopico-send.desktop" # KDE only loads executable service menus
+    echo "Installed: $kio_dir/kopico-send.desktop"
 
     # Refresh the GNOME app database so GAppInfo picks up the new entry immediately
     if command -v update-desktop-database &>/dev/null; then

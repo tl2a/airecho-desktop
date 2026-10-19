@@ -1,7 +1,8 @@
 [Desktop Entry]
 Name=Kopico Desktop
 Comment=Kopico clipboard manager
-Exec=/home/arpan/Documents/Rust/kopico-desktop/target/debug/kopico-desktop
+# %F: files from the file manager ("Open With") are sent, not opened
+Exec=kopico-desktop %F
 Icon=dialog-information
 Type=Application
 Categories=Utility;

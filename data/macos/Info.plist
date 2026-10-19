@@ -26,5 +26,47 @@
   <string>11.0</string>
   <key>NSHighResolutionCapable</key>
   <true/>
+
+  <!-- Finder → right-click → Open With → Kopico Desktop sends the selection.
+       "Alternate" rank: Kopico is never offered as the default app for anything. -->
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>Any File or Folder</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>public.item</string>
+      </array>
+    </dict>
+  </array>
+
+  <!-- Finder → right-click → Quick Actions / Services → "Send with Kopico".
+       Handled by src/macos_services.rs (sendFiles:userData:error:). NSRequiredContext
+       makes it enabled by default. -->
+  <key>NSServices</key>
+  <array>
+    <dict>
+      <key>NSMenuItem</key>
+      <dict>
+        <key>default</key>
+        <string>Send with Kopico</string>
+      </dict>
+      <key>NSMessage</key>
+      <string>sendFiles</string>
+      <key>NSPortName</key>
+      <string>Kopico Desktop</string>
+      <key>NSRequiredContext</key>
+      <dict/>
+      <key>NSSendFileTypes</key>
+      <array>
+        <string>public.item</string>
+      </array>
+    </dict>
+  </array>
 </dict>
 </plist>

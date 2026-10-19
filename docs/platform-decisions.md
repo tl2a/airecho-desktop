@@ -11,6 +11,9 @@ holds.
   - [macOS](#macos-notifications)
 - [Clipboard](#clipboard)
 - [Receiving with croc](#receiving-with-croc)
+- [Sending](#sending)
+  - [Watching copied text](#watching-copied-text)
+  - [Sending files from the file manager](#sending-files-from-the-file-manager)
 - [macOS: GTK libraries](#macos-gtk-libraries)
 - [Open questions](#open-questions)
 
@@ -121,6 +124,61 @@ Details in [receiver.md](receiver.md). The decisions in short:
 | LAN discovery fails on some machines (seen on macOS) | optional Sender IP → `croc --ip` |
 | codes can't be passed as arguments | `CROC_SECRET` (and `CROC_PASS` for relay passwords) |
 | background thread → UI | `async-channel` + `glib::spawn_future_local`; never poll from `idle_add` (it spins a CPU core) |
+
+## Sending
+
+Details in [sending.md](sending.md).
+
+**Constraint.** Kopico sends and receives with the same croc code; a running receive loop
+would pick up Kopico's own `croc send`. **Decision:** stop receiving before each send (but
+wait for an incoming transfer to finish first), one send at a time, resume afterwards.
+
+**Constraint.** Two Kopicos with one code turn a copy into an endless ping-pong (receive →
+clipboard → "copy" → send back). **Decision:** never send text equal to the last text
+received or sent.
+
+**Constraint.** croc copies the code to the clipboard by default — the clipboard watcher
+would send it. **Decision:** always `--disable-clipboard`.
+
+**Constraint.** A killed `croc send --text` leaves the text in `croc-stdin-*` in its working
+directory. **Decision:** run croc in a private owner-only folder and delete those files
+before and after every send.
+
+**Constraint.** croc only takes text as a command-line argument (`--text`). **Decision:**
+accept it, cap text at 64 KB; note that local users can see it in the process list during
+the send.
+
+**Constraint.** Automatically sending every copy would also send passwords. **Decision:**
+skip copies marked private by password managers, and make *Send Copied Text* a switch.
+
+### Watching copied text
+
+| Platform | Constraint | Decision |
+|---|---|---|
+| macOS | No clipboard-change event exists | Check `NSPasteboard.changeCount` every 500 ms (cheap; what clipboard managers do) |
+| Linux X11 | — | GDK `changed` signal |
+| Linux Wayland | Clients only learn about clipboard changes while focused, unless the compositor offers data-control (GNOME doesn't) | GDK `changed`; on GNOME copies are noticed only while Kopico's window is focused. A data-control watcher (`wl-paste --watch`, wlroots/KDE) would be a possible addition |
+
+### Sending files from the file manager
+
+**macOS.** The Finder *Share* menu only lists *Share Extensions*: a separate sandboxed
+`.appex` built with Xcode, signed and embedded in the app. **Decision:** a **Service**
+instead — `NSServices` in Info.plist plus a provider object (`src/macos_services.rs`) — which
+puts *Send with Kopico* in Finder's right-click *Quick Actions / Services* menu, and
+`CFBundleDocumentTypes` (`public.item`, rank *Alternate*) for *Open With → Kopico Desktop*.
+GTK's macOS backend delivers LaunchServices "open" requests to `GApplication::open` in the
+**running** process, so both end in the same code. Verified on macOS 26 with
+`open -a` and `NSPerformService`.
+
+**macOS: no single-instance via GApplication.** GApplication finds a running instance over
+D-Bus, which macOS doesn't have; `kopico-desktop <files>` on macOS starts a second Kopico.
+Files must therefore come through LaunchServices (Finder), which targets the running app.
+
+**Linux.** No standard "send" menu across file managers. **Decision:** the `.desktop` file
+takes files (`Exec=kopico-desktop %F`) for *Open With*, plus *Send with Kopico* entries for
+Nautilus (a `nautilus-python` extension) and Dolphin (a KDE service menu), installed by
+`dev-install.sh`. They run `kopico-desktop <files>`; GApplication (`HANDLES_OPEN`) forwards
+them to the running instance over D-Bus. Untested so far.
 
 ## macOS: GTK libraries
 
