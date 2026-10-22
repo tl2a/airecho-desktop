@@ -65,6 +65,8 @@ usual install folders (`receiver::find_croc`). The release notes say so.
   Adwaita icon theme is copied too, because not every desktop has it. Libraries every
   desktop has (glibc, libGL, X11/Wayland, fontconfig, harfbuzz, fribidi, …) are left to
   the system, per AppImage's exclude list.
+- The AppImage runtime is downloaded explicitly with retries and passed to the output
+  plugin, so transient upstream runtime download failures do not abort packaging.
 - The GTK plugin's runtime hook forces `GDK_BACKEND=x11` and `GTK_THEME=Adwaita:light`
   (workarounds for GTK 3). Both are removed: the first loses Wayland, the second breaks
   libadwaita's dark mode and accent colours.

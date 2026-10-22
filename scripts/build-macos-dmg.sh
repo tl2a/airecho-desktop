@@ -75,6 +75,12 @@ done
     -s "$ROOT/lib" -s "$PREFIX/lib" </dev/null
 # @rpath = Contents/Frameworks, for the executable and for the dlopen'ed image loader
 # (which lives there itself). dylibbundler rewrites existing rpaths to a literal "@rpath/".
+for loader in "$APP"/Contents/Frameworks/libpixbufloader*; do
+    [ -e "$loader" ] || continue
+    if otool -l "$loader" | grep 'cmd LC_ID_DYLIB' >/dev/null; then
+        install_name_tool -id "@rpath/$(basename "$loader")" "$loader"
+    fi
+done
 set_rpath() { # <file> <rpath>
     local old
     for old in $(otool -l "$1" | awk '/cmd LC_RPATH/ { getline; getline; print $2 }'); do
