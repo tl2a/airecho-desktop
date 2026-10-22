@@ -23,8 +23,9 @@ LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchS
 
 refresh_bundle() {
     local binary="$1"
-    mkdir -p "$APP/Contents/MacOS"
+    mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
     cp "$REPO_ROOT/data/macos/Info.plist" "$APP/Contents/Info.plist"
+    cp "$REPO_ROOT/data/macos/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
     # A copy, not a symlink: the bundle must contain the real executable to be signed
     rm -f "$APP/Contents/MacOS/kopico-desktop"
     cp "$binary" "$APP/Contents/MacOS/kopico-desktop"

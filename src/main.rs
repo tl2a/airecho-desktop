@@ -17,6 +17,8 @@ mod sender;
 mod tray;
 mod transfers;
 #[cfg(target_os = "macos")]
+mod macos_bundle;
+#[cfg(target_os = "macos")]
 mod macos_services;
 
 use receiver::RelayMode;
@@ -47,6 +49,9 @@ const ACTION_SEND_FILES: &str = "send-files";
 const RELAY_MODES: [&str; 3] = ["local", "own-relay", "public-relay"];
 
 fn main() -> gtk4::glib::ExitCode {
+    #[cfg(target_os = "macos")]
+    macos_bundle::setup_environment();
+
     let bytes = include_bytes!(env!("GRESOURCE_FILE"));
     let resource = gio::Resource::from_data(&gtk4::glib::Bytes::from_static(bytes))
         .expect("Failed to load gresource data");

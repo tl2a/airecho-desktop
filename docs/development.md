@@ -10,6 +10,8 @@ Setting up, running, debugging and testing Kopico Desktop on Linux and macOS.
 - [Tests](#tests)
 - [Troubleshooting](#troubleshooting)
 
+Release packaging (`.dmg`, `.AppImage`) and the release workflow: [releasing.md](releasing.md).
+
 ## Toolchain and system libraries
 
 | Tool / library | Minimum | Why |

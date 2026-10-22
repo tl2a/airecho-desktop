@@ -62,7 +62,16 @@ own transfer) and resumes afterwards. Text nobody picks up within 30 s is droppe
 copied text replaces older text that is still waiting. Details:
 [docs/sending.md](docs/sending.md).
 
-## Requirements
+## Download
+
+Ready-made builds are on the [Releases](https://github.com/tl2a/kopico-desktop/releases)
+page: a `.dmg` for macOS 15+ (Apple Silicon and Intel) and an `.AppImage` for Linux
+(ARM and x86_64; needs glibc 2.43+, e.g. Ubuntu 26.04 / Fedora 44). Install
+[croc](https://github.com/schollz/croc) as well — Kopico doesn't include it. The macOS app
+isn't notarized: allow it once in *System Settings → Privacy & Security*. Details and how
+releases are made: [docs/releasing.md](docs/releasing.md).
+
+## Requirements (building)
 
 | | Linux | macOS |
 |---|---|---|
@@ -191,13 +200,17 @@ src/sender.rs         croc send (text, files)
 src/croc_names.rs     send files under names croc accepts (e.g. macOS screenshots)
 src/clipboard.rs      write received text, watch copied text
 src/macos_services.rs Finder "Send with Kopico" (macOS Services)
+src/macos_bundle.rs   release .app: points GTK at its bundled data
 src/tray.rs           tray icon and menu
 src/notification.rs   system notifications (Linux: gio, macOS: notify-rust)
 data/ui/window.blp    UI (Blueprint)
 data/style.css        app CSS
-data/macos/           macOS bundle metadata (Info.plist: Services, Open With)
+data/macos/           macOS bundle metadata (Info.plist: Services, Open With; AppIcon.icns)
+data/icons/           app icon (SVG)
 data/linux/           File-manager integrations ("Send with Kopico")
 scripts/macos-app.sh  builds, signs and runs Kopico Desktop.app (macOS `cargo run` runner)
+scripts/build-*.sh    release packaging: .dmg (macOS), .AppImage (Linux)
+.github/workflows/    release workflow (builds on every push to main)
 dev-install.sh        registers the dev build for notifications (Linux and macOS)
 docs/                 deeper documentation
 ```
@@ -209,6 +222,7 @@ docs/                 deeper documentation
 - [docs/receiver.md](docs/receiver.md) — the croc receive loop and croc's behaviour it relies on
 - [docs/sending.md](docs/sending.md) — sending copied text and files, and how it fits with receiving
 - [docs/platform-decisions.md](docs/platform-decisions.md) — platform constraints and the decisions taken
+- [docs/releasing.md](docs/releasing.md) — release builds (.dmg, .AppImage) and the GitHub workflow
 - [docs/gtk4-libadwaita-patterns.md](docs/gtk4-libadwaita-patterns.md) — GTK 4 / libadwaita coding patterns used here
 
 ## License

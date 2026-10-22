@@ -90,6 +90,9 @@ Do **not** mix `gtk4::Widget` and `adw::gtk::Widget` for the same type.
 | `src/croc_names.rs` | File names croc's receiver accepts; stages unsafe ones | ✅ Yes |
 | `src/clipboard.rs` | Clipboard write + watch | ✅ Yes |
 | `src/macos_services.rs` | macOS Finder *Send with Kopico* | ✅ Rarely |
+| `src/macos_bundle.rs` | Release `.app`: GTK env pointing at bundled data | ✅ Rarely — see `docs/releasing.md` |
+| `scripts/build-macos-dmg.sh`, `scripts/build-appimage.sh` | Release packaging | ✅ Yes — test locally first (`docs/releasing.md`) |
+| `.github/workflows/release.yml` | Builds dmg/AppImage on push to `main`, releases new versions | ✅ Yes |
 | `data/linux/` | Linux file-manager *Send with Kopico* actions | ✅ Yes |
 | `src/receiver.rs` | croc receive loop (background thread, polling) | ✅ Yes — see CLAUDE.md “Receiving Files” first |
 | `src/tray.rs` | System tray icon + menu → `app.*` actions | ✅ Yes |

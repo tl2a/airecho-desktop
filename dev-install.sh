@@ -31,6 +31,11 @@ install_linux() {
     echo "Installed: $dest"
     echo "  Exec= → $BINARY %F"
 
+    local icon_dir="$HOME/.local/share/icons/hicolor/scalable/apps"
+    mkdir -p "$icon_dir"
+    cp "$REPO_ROOT/data/icons/$APP_ID.svg" "$icon_dir/$APP_ID.svg"
+    echo "Installed: $icon_dir/$APP_ID.svg"
+
     # Right-click → "Send with Kopico" in Nautilus (needs nautilus-python)
     local nautilus_dir="$HOME/.local/share/nautilus-python/extensions"
     mkdir -p "$nautilus_dir"

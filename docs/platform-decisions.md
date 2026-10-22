@@ -191,6 +191,22 @@ MacPorts, two GLib copies end up in one process and GTK crashes at startup (`typ
 Homebrew's `pkgconfig` folders in `PKG_CONFIG_PATH`; verify with `otool -L`. See
 [development.md](development.md#macos-one-glib-only).
 
+## Release packaging
+
+Details: [releasing.md](releasing.md).
+
+- **GTK ≥ 4.22 / libadwaita ≥ 1.9 decides the build systems.** Linux AppImages are built
+  on Ubuntu 26.04 (the first LTS with GNOME 50), so they need glibc ≥ 2.43. macOS
+  arm64 uses Homebrew bottles; macOS Intel uses MacPorts with `gtk4 +quartz` built from
+  source, because Homebrew has no Intel GTK bottles and MacPorts' binaries are `+x11`.
+  The `.dmg` needs the macOS version it was built on (15).
+- **Self-contained bundles, croc excluded.** GTK, libadwaita and their data ship inside
+  the `.app` / AppImage. croc stays a requirement users install themselves.
+- **macOS:** libraries referenced via `@rpath` (fits every library's header);
+  `src/macos_bundle.rs` points GTK at the bundled data. Ad-hoc signed, not notarized.
+- **Linux:** `linuxdeploy-plugin-gtk`'s forced `GDK_BACKEND=x11` and
+  `GTK_THEME=Adwaita:light` are removed (they break Wayland and libadwaita's styling).
+
 ## Open questions
 
 - **Saving settings.** GSettings (GNOME standard, needs a schema install) or a small config

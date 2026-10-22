@@ -3,7 +3,7 @@ Name=Kopico Desktop
 Comment=Kopico clipboard manager
 # %F: files from the file manager ("Open With") are sent, not opened
 Exec=kopico-desktop %F
-Icon=dialog-information
+Icon=in.tl2a.kopico-desktop
 Type=Application
 Categories=Utility;
 StartupNotify=true

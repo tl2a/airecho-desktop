@@ -32,6 +32,7 @@ How Kopico Desktop is put together. For the croc side in detail see
 | `src/croc_names.rs` | Sends files whose names croc refuses under safe names (staged hard links) |
 | `src/clipboard.rs` | Write received text; watch for text the user copies |
 | `src/macos_services.rs` | Finder → Services → *Send with Kopico* (macOS) |
+| `src/macos_bundle.rs` | Release `.app` only: points GTK at the libraries' data bundled in `Contents/Resources` |
 | `src/tray.rs` | Tray / menu bar icon and menu |
 | `src/notification.rs` | System notifications (Linux: gio, macOS: notify-rust) |
 | `data/ui/window.blp` | The window (Blueprint) |
