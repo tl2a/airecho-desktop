@@ -56,6 +56,7 @@ echo "==> Fetching linuxdeploy"
 mkdir -p "$WORK_DIR/tools"
 LINUXDEPLOY="$WORK_DIR/tools/linuxdeploy-$ARCH.AppImage"
 GTK_PLUGIN="$WORK_DIR/tools/linuxdeploy-plugin-gtk.sh"
+RUNTIME_FILE="$WORK_DIR/tools/runtime-$ARCH"
 [ -x "$LINUXDEPLOY" ] || {
     curl -fsSL -o "$LINUXDEPLOY" \
         "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-$ARCH.AppImage"
@@ -88,7 +89,14 @@ if grep -qE '^export (GDK_BACKEND|GTK_THEME)=' "$HOOK"; then
 fi
 
 echo "==> Creating $OUTPUT_NAME"
-(cd "$WORK_DIR" && OUTPUT="$OUTPUT_NAME" "$LINUXDEPLOY" --appdir "$APPDIR" --output appimage)
+echo "==> Fetching AppImage runtime for $ARCH"
+curl -fSL --retry 5 --retry-all-errors --retry-delay 2 --retry-max-time 120 \
+    -o "$RUNTIME_FILE" \
+    "https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-$ARCH"
+(cd "$WORK_DIR" && \
+    LDAI_OUTPUT="$OUTPUT_NAME" \
+    LDAI_RUNTIME_FILE="$RUNTIME_FILE" \
+    "$LINUXDEPLOY" --appdir "$APPDIR" --output appimage)
 mkdir -p "$OUT_DIR"
 mv "$WORK_DIR/$OUTPUT_NAME" "$OUT_DIR/"
 echo "Built: $OUT_DIR/$OUTPUT_NAME"
