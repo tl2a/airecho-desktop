@@ -48,9 +48,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Temporarily disabled while investigating ARM builds.
-          # - runner: ubuntu-24.04
-          #   arch: x86_64
+          - runner: ubuntu-24.04
+            arch: x86_64
           - runner: ubuntu-24.04-arm
             arch: aarch64
     runs-on: ${{ matrix.runner }}
@@ -88,10 +87,9 @@ jobs:
             arch: arm64
             packages: homebrew
           # Intel: MacPorts, GTK built with +quartz (its binary packages are +x11)
-          # Temporarily disabled while investigating ARM builds.
-          # - runner: macos-15-intel
-          #   arch: x86_64
-          #   packages: macports
+          - runner: macos-15-intel
+            arch: x86_64
+            packages: macports
     runs-on: ${{ matrix.runner }}
     env:
       VERSION: ${{ needs.version.outputs.version }}
