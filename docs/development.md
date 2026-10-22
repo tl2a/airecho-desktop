@@ -10,6 +10,8 @@ Setting up, running, debugging and testing Kopico Desktop on Linux and macOS.
 - [Tests](#tests)
 - [Troubleshooting](#troubleshooting)
 
+Release packaging (`.dmg`, `.AppImage`) and the release workflow: [releasing.md](releasing.md).
+
 ## Toolchain and system libraries
 
 | Tool / library | Minimum | Why |
@@ -46,7 +48,14 @@ cargo run
 
 `dev-install.sh` copies `data/in.tl2a.kopico-desktop.desktop` to
 `~/.local/share/applications/` with `Exec=` pointing at `target/debug/kopico-desktop`.
-GNOME Shell only shows notifications for apps it has a `.desktop` file for.
+GNOME Shell only shows notifications for apps it has a `.desktop` file for. It also
+installs the *Send with Kopico* right-click entries: a Nautilus extension in
+`~/.local/share/nautilus-python/extensions/` (needs `nautilus-python` /
+`python3-nautilus`; restart Files with `nautilus -q`), a Dolphin service menu in
+`~/.local/share/kio/servicemenus/`, a Nemo action in `~/.local/share/nemo/actions/`,
+and a Thunar custom action merged into `~/.config/Thunar/uca.xml`. Restart each file
+manager after installation; KDE's service-menu cache is refreshed when available.
+The Thunar installer preserves the other custom actions in `uca.xml`.
 
 Optional:
 
@@ -151,12 +160,13 @@ is in [receiver.md](receiver.md#reading-the-debug-log).
 
 ```sh
 cargo test                                  # parser unit tests, fast, no network
-cargo test -- --ignored --test-threads=1    # end-to-end with real croc
+cargo test -- --ignored --test-threads=1    # end-to-end with real croc (receive + send)
 ```
 
 The end-to-end tests start real `croc relay` / `croc send` processes on local ports and
 check: receiving a file through your own relay, receiving via `--ip`, receiving text
-byte-for-byte, the wait limit and stop latency, and rate-limit detection. They need croc
+byte-for-byte, the wait limit and stop latency, rate-limit detection, and Kopico's own
+sending of text and files plus cancelling a waiting send. They need croc
 installed and free local ports 9009–9013 (croc send's own relay) and 9410–9434 (test
 relays).
 
@@ -176,3 +186,11 @@ doesn't see its own discovery broadcast. Test it with two devices on the same ne
 | No notifications on macOS / not in Settings → Notifications | Start with `cargo run` (or the `.app`), not `target/debug/…`; allow notifications when asked |
 | No tray icon on GNOME | Install the AppIndicator extension |
 | `croc is not installed or not on PATH` toast | Install croc, or put it in one of the folders listed in the README |
+| Copied text isn't sent | Kopico on? Advanced → *Send Copied Text* on? Password-manager copies are skipped by design. GNOME/Wayland: only while Kopico is focused |
+| "the receiver rejected the transfer" (croc: `peer error: refusing files`) | croc sends this for **any** error on the receiving side — its own output says which. Usual causes: a file name croc won't create (Kopico renames those, see [sending.md](sending.md#file-names-croc-refuses)), or a receiver without `--yes` and no terminal (it declines). Text is never affected |
+| "Not delivered: nobody picked up …" | The other side isn't receiving with the same code/mode — or (Local mode) can't reach this machine; give it this machine's IP as *Sender IP* |
+| No *Send with Kopico* in Finder | Start Kopico once with `cargo run` (registers the service), then check System Settings → Keyboard → Keyboard Shortcuts → Services → Files and Folders |
+| No *Send with Kopico* in Nautilus | Install `nautilus-python` (Fedora) or `python3-nautilus` (Debian/Ubuntu), run `./dev-install.sh`, then restart Nautilus with `nautilus -q` |
+| No *Send with Kopico* in Nemo | Run `./dev-install.sh`, then restart Nemo with `nemo -q` |
+| No *Send with Kopico* in Thunar | Run `./dev-install.sh`, then restart Thunar with `thunar -q`; check `~/.config/Thunar/uca.xml` for the Kopico action |
+| No *Send with Kopico* in Dolphin | Run `./dev-install.sh`; if it still does not appear, restart Dolphin or log out and back in |

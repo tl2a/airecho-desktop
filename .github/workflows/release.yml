@@ -1,0 +1,182 @@
+# Builds Kopico Desktop for macOS (.dmg) and Linux (.AppImage), each for arm64 and x86_64,
+# and publishes them as a GitHub release — see docs/releasing.md.
+#
+# Every push to main (= every merged pull request) builds all four. A release is created
+# only for a version that has none yet: bump `version` in Cargo.toml to release.
+# Otherwise the binaries are still downloadable from the run's artifacts.
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      released: ${{ steps.version.outputs.released }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if gh release view "v$version" >/dev/null 2>&1; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::v$version is already released — building only. Bump the version in Cargo.toml to release."
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  linux:
+    name: Linux ${{ matrix.arch }} (AppImage)
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    # GTK 4.22 / libadwaita 1.9 (the crates' gnome_50 / v1_9 features) need a GNOME 50 distro
+    container: ubuntu:26.04
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
+        with:
+          path: |
+            /github/home/.cargo/registry
+            /github/home/.cargo/git
+            target
+          key: linux-${{ matrix.arch }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: linux-${{ matrix.arch }}-cargo-
+      - name: Build AppImage
+        run: scripts/build-appimage.sh --install-deps
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-${{ matrix.arch }}
+          path: dist/*.AppImage
+          if-no-files-found: error
+
+  macos:
+    name: macOS ${{ matrix.arch }} (dmg)
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Homebrew has Quartz GTK bottles for Apple Silicon only
+          - runner: macos-15
+            arch: arm64
+            packages: homebrew
+          # Intel: MacPorts, GTK built with +quartz (its binary packages are +x11)
+          - runner: macos-15-intel
+            arch: x86_64
+            packages: macports
+    runs-on: ${{ matrix.runner }}
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install GTK (Homebrew)
+        if: matrix.packages == 'homebrew'
+        run: |
+          brew install gtk4 libadwaita blueprint-compiler adwaita-icon-theme librsvg dylibbundler pkgconf
+
+      # Building GTK takes a while, so /opt/local is cached; bump the -vN suffix to rebuild.
+      # The cache is restored as the runner user, which can't create /opt/local itself.
+      - name: Prepare /opt/local
+        if: matrix.packages == 'macports'
+        run: |
+          sudo mkdir -p /opt/local
+          sudo chown "$USER" /opt/local
+      - name: Restore MacPorts
+        if: matrix.packages == 'macports'
+        id: macports-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: /opt/local
+          key: macports-${{ matrix.runner }}-gtk4-libadwaita-v1
+      - name: Install GTK (MacPorts)
+        if: matrix.packages == 'macports' && steps.macports-cache.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSLO https://github.com/macports/macports-base/releases/download/v2.12.7/MacPorts-2.12.7-15-Sequoia.pkg
+          sudo installer -pkg MacPorts-2.12.7-15-Sequoia.pkg -target /
+          export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+          sudo port -N selfupdate
+          sudo port -N install gtk4 +quartz
+          sudo port -N install libadwaita blueprint-compiler adwaita-icon-theme librsvg dylibbundler pkgconfig
+          sudo rm -rf /opt/local/var/macports/build /opt/local/var/macports/distfiles
+          sudo chown -R "$USER" /opt/local
+      - name: Save MacPorts
+        if: matrix.packages == 'macports' && steps.macports-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: /opt/local
+          key: ${{ steps.macports-cache.outputs.cache-primary-key }}
+      - name: Use MacPorts only
+        if: matrix.packages == 'macports'
+        run: |
+          # The runner's Homebrew (/usr/local) must not be picked up: two GLibs in one
+          # process crash at startup
+          echo "/opt/local/bin" >> "$GITHUB_PATH"
+          echo "PKG_CONFIG_LIBDIR=/opt/local/lib/pkgconfig:/opt/local/share/pkgconfig" >> "$GITHUB_ENV"
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: macos-${{ matrix.arch }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: macos-${{ matrix.arch }}-cargo-
+      - name: Build dmg
+        run: scripts/build-macos-dmg.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos-${{ matrix.arch }}
+          path: dist/*.dmg
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: [version, linux, macos]
+    if: needs.version.outputs.released == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create release v${{ needs.version.outputs.version }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          (cd dist && sha256sum -- * > SHA256SUMS)
+          gh release create "v$VERSION" dist/* \
+            --target "$GITHUB_SHA" \
+            --title "Kopico Desktop $VERSION" \
+            --notes-file .github/release-notes.md \
+            --generate-notes

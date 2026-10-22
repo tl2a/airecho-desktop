@@ -1,0 +1,8 @@
+[Nemo Action]
+Active=true
+Name=Send with Kopico
+Comment=Send the selected files with Kopico
+Exec=@KOPICO_BIN@ %F
+Icon-Name=document-send
+Selection=any
+Extensions=any;

@@ -21,6 +21,7 @@ use gtk4::glib;
 /// Notification ids — re-using an id replaces the previous notification (Linux).
 const ENABLED_ID: &str = "enabled";
 const FILE_ID: &str = "file-received";
+const SEND_ID: &str = "send";
 
 /// Tell the user Kopico was turned on (from the window or the tray).
 pub fn send_enabled(app: &Application) {
@@ -30,6 +31,17 @@ pub fn send_enabled(app: &Application) {
 /// Tell the user a text message arrived and is on the clipboard.
 pub fn send_text_received(app: &Application, message: &str) {
     send(app, FILE_ID, "Text Received", message);
+}
+
+/// Files are about to be sent ("Sending “a.jpg” — waiting for the receiver").
+pub fn send_sending(app: &Application, message: &str) {
+    send(app, SEND_ID, "Sending", message);
+}
+
+/// How sending files ended (delivered, nobody picked it up, failed).
+pub fn send_sent(app: &Application, message: &str) {
+    // Same id as send_sending → replaces the "waiting" notification
+    send(app, SEND_ID, "Kopico", message);
 }
 
 /// Tell the user files arrived via croc. `message` is e.g. "“a.jpg” saved to ~/Downloads/Kopico".

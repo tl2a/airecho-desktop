@@ -1,9 +1,10 @@
 # Kopico Desktop
 
-Kopico Desktop is a small background app that **receives files and text sent with
+Kopico Desktop is a small background app that **sends and receives files and text with
 [croc](https://github.com/schollz/croc)** — without you having to type a `croc` command
-every time. Leave it running in the system tray: files land in `~/Downloads/Kopico`, and
-text goes straight to your clipboard, ready to paste.
+every time. Leave it running in the system tray: copy text on one machine and paste it on
+the other; right-click files and choose *Send with Kopico*. Received files land in
+`~/Downloads/Kopico`, received text goes straight to your clipboard.
 
 It is a GNOME-style app (GTK 4 + libadwaita, written in Rust) that runs on **Linux** and
 **macOS**.
@@ -15,6 +16,11 @@ It is a GNOME-style app (GTK 4 + libadwaita, written in Rust) that runs on **Lin
 - **Files** are saved to `~/Downloads/Kopico`. A file that already exists is never
   overwritten — the new one is saved as `name (1).ext`.
 - **Text** (`croc send --text …`) is copied to the clipboard.
+- **Sends what you copy.** Copy text anywhere and Kopico sends it (switch off in Advanced →
+  *Send Copied Text*). Copies that password managers mark as private are never sent.
+- **Sends files** from the right-click menu: Finder → *Send with Kopico* (Services /
+  Quick Actions) or *Open With → Kopico Desktop*; Nautilus, Dolphin, Nemo, and Thunar
+  can use *Send with Kopico* after `./dev-install.sh`; or Advanced → *Send Files…*.
 - **Lives in the tray / menu bar.** Closing the window hides it; the tray icon turns
   green while Kopico is on. Tray menu: *Enable*, *Settings*, *Quit*.
 - **Notifies you** when files or text arrive, and when Kopico is switched on.
@@ -30,6 +36,8 @@ It is a GNOME-style app (GTK 4 + libadwaita, written in Rust) that runs on **Lin
 
 ## Sending to Kopico
 
+Another Kopico with the same code just works. From plain croc:
+
 On the other machine, use the same code Kopico listens for (Advanced → Receive Code):
 
 ```sh
@@ -41,7 +49,29 @@ croc requires the code in the `CROC_SECRET` environment variable on Linux/macOS.
 set a **Sender IP** in Kopico, don't use `--no-local` on the sender — Kopico connects to
 the small relay croc starts on the sender (port 9009).
 
-## Requirements
+## Sending from Kopico
+
+Kopico sends with the same code and mode it receives with, e.g. in Local mode:
+
+```sh
+CROC_SECRET=<your-code> croc --local send --text "<what you copied>"
+```
+
+Receiving pauses while sending (with one shared code Kopico would otherwise receive its
+own transfer) and resumes afterwards. Text nobody picks up within 30 s is dropped; newer
+copied text replaces older text that is still waiting. Details:
+[docs/sending.md](docs/sending.md).
+
+## Download
+
+Ready-made builds are on the [Releases](https://github.com/tl2a/kopico-desktop/releases)
+page: a `.dmg` for macOS 15+ (Apple Silicon and Intel) and an `.AppImage` for Linux
+(ARM and x86_64; needs glibc 2.43+, e.g. Ubuntu 26.04 / Fedora 44). Install
+[croc](https://github.com/schollz/croc) as well — Kopico doesn't include it. The macOS app
+isn't notarized: allow it once in *System Settings → Privacy & Security*. Details and how
+releases are made: [docs/releasing.md](docs/releasing.md).
+
+## Requirements (building)
 
 | | Linux | macOS |
 |---|---|---|
@@ -52,6 +82,7 @@ the small relay croc starts on the sender (port 9009).
 | Adwaita icon theme | usually installed | `sudo port install adwaita-icon-theme` |
 | Tray icon on GNOME Shell | *AppIndicator and KStatusNotifierItem Support* extension | — |
 | `wl-clipboard` (optional, Wayland) | lets Kopico set the clipboard while unfocused | — |
+| `nautilus-python` (optional) | *Send with Kopico* in GNOME Files | — |
 
 The GTK/libadwaita minimums come from the crate feature flags (`gnome_50`, `v1_9`), which
 are checked at build time. Check yours with
@@ -68,7 +99,7 @@ are checked at build time. Check yours with
 ```sh
 # Fedora:         sudo dnf install gtk4-devel libadwaita-devel blueprint-compiler glib2-devel
 # Debian/Ubuntu:  sudo apt install libgtk-4-dev libadwaita-1-dev blueprint-compiler libglib2.0-dev-bin
-./dev-install.sh      # once: installs the .desktop file (needed for notifications)
+./dev-install.sh      # once: .desktop file (notifications) + "Send with Kopico" menus
 cargo run
 ```
 
@@ -78,7 +109,7 @@ cargo run
 sudo port install gtk4 libadwaita blueprint-compiler adwaita-icon-theme pkgconfig
 cargo build
 ./dev-install.sh      # once: creates and registers "~/Applications/Kopico Desktop.app"
-cargo run             # runs Kopico from that app bundle (needed for notifications)
+cargo run             # runs Kopico from that app bundle (notifications, Finder menu)
 ```
 
 On the first start macOS asks to allow notifications; Kopico Desktop then appears in
@@ -116,7 +147,7 @@ More: [docs/development.md](docs/development.md).
 | `async-channel` | Delivers events from the background croc thread to the UI without polling |
 | `dirs-next` | Finds the Downloads and home folders |
 | `notify-rust` (macOS) | Notifications through Apple's `UNUserNotificationCenter` |
-| `objc2-app-kit`, `objc2-foundation` (macOS) | Writes received text to the macOS clipboard (`NSPasteboard`) |
+| `objc2`, `objc2-app-kit`, `objc2-foundation` (macOS) | Clipboard (`NSPasteboard`: write received text, watch copies) and the Finder *Send with Kopico* Service |
 
 Linux notifications use GTK's own `gio::Notification`; no extra crate.
 
@@ -137,6 +168,11 @@ The short version — each one is explained in
 | GTK's clipboard copies nothing on macOS | Write to `NSPasteboard` directly |
 | Wayland may refuse clipboard writes from an unfocused app | Use `wl-copy` when available, GTK otherwise |
 | Two GLib copies in one process crash GTK | One package manager for the GTK stack on macOS |
+| Sending and receiving use one croc code | Pause receiving while sending; never interrupt an incoming transfer |
+| Two Kopicos would bounce copied text back and forth | Don't send text that was just received or sent |
+| macOS has no clipboard-change event | Check the pasteboard every 500 ms |
+| GNOME/Wayland only reports copies to the focused app | Copied text is sent there only while Kopico's window has focus |
+| A Finder *Share* entry needs a separate Share Extension | Finder *Services* item + *Open With*, both handled in-app |
 
 ## Known limitations
 
@@ -145,6 +181,10 @@ The short version — each one is explained in
 - **The default receive code is in the source code.** Anyone who knows it and can reach
   you (or your relay) can send you files. Change it in Advanced, or in `src/main.rs`.
 - Clicking a notification on macOS does nothing yet (on Linux it opens the window).
+- Copied text is passed to croc as a command-line argument, so other users on the same
+  machine could see it in the process list while it is being sent.
+- On GNOME (Wayland), copies are only noticed while Kopico's window is focused.
+- The Linux file-manager *Send with Kopico* actions are not tested on every file manager.
 - macOS release builds would need a real Apple Developer signature instead of the ad-hoc
   development one.
 - `meson.build` still asks for GTK ≥ 4.14 / libadwaita ≥ 1.6 although the code needs
@@ -154,13 +194,23 @@ The short version — each one is explained in
 
 ```
 src/main.rs           app setup, actions (= app state), window, clipboard
+src/transfers.rs      coordinates receiving and sending (one croc code)
 src/receiver.rs       croc receive loop (background thread)
+src/sender.rs         croc send (text, files)
+src/croc_names.rs     send files under names croc accepts (e.g. macOS screenshots)
+src/clipboard.rs      write received text, watch copied text
+src/macos_services.rs Finder "Send with Kopico" (macOS Services)
+src/macos_bundle.rs   release .app: points GTK at its bundled data
 src/tray.rs           tray icon and menu
 src/notification.rs   system notifications (Linux: gio, macOS: notify-rust)
 data/ui/window.blp    UI (Blueprint)
 data/style.css        app CSS
-data/macos/           macOS bundle metadata (Info.plist)
+data/macos/           macOS bundle metadata (Info.plist: Services, Open With; AppIcon.icns)
+data/icons/           app icon (SVG)
+data/linux/           File-manager integrations ("Send with Kopico")
 scripts/macos-app.sh  builds, signs and runs Kopico Desktop.app (macOS `cargo run` runner)
+scripts/build-*.sh    release packaging: .dmg (macOS), .AppImage (Linux)
+.github/workflows/    release workflow (builds on every push to main)
 dev-install.sh        registers the dev build for notifications (Linux and macOS)
 docs/                 deeper documentation
 ```
@@ -170,7 +220,9 @@ docs/                 deeper documentation
 - [docs/development.md](docs/development.md) — setup, running, debugging, testing, troubleshooting
 - [docs/architecture.md](docs/architecture.md) — how the app is put together
 - [docs/receiver.md](docs/receiver.md) — the croc receive loop and croc's behaviour it relies on
+- [docs/sending.md](docs/sending.md) — sending copied text and files, and how it fits with receiving
 - [docs/platform-decisions.md](docs/platform-decisions.md) — platform constraints and the decisions taken
+- [docs/releasing.md](docs/releasing.md) — release builds (.dmg, .AppImage) and the GitHub workflow
 - [docs/gtk4-libadwaita-patterns.md](docs/gtk4-libadwaita-patterns.md) — GTK 4 / libadwaita coding patterns used here
 
 ## License

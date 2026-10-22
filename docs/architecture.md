@@ -7,24 +7,32 @@ How Kopico Desktop is put together. For the croc side in detail see
 ## Overview
 
 ```
-┌──────────────────────── GTK main thread ────────────────────────┐
-│                                                                  │
-│  AdwApplication ── app actions (the app's state) ──┬── window    │
-│        │            enabled, tray, relay-mode, …   ├── tray menu │
-│        │                                            └── shortcuts │
-│        ├── Tray (tray.rs)            ── icon + menu              │
-│        ├── ReceiverState (main.rs)   ── starts/stops ──┐         │
-│        └── notification.rs, clipboard                   │         │
-│                 ▲                                       │         │
-│                 │ ReceiverEvent (async-channel)         ▼         │
-└─────────────────┼──────────────────────────── croc-receive thread ┘
-                  └──── receive_loop (receiver.rs) ── runs croc again and again
+┌───────────────────────────── GTK main thread ─────────────────────────────┐
+│                                                                            │
+│  AdwApplication ── app actions (the app's state) ──┬── window              │
+│     │  │           enabled, tray, relay-mode, …    ├── tray menu           │
+│     │  └─ open(files) ◀── Finder / Nautilus /      └── shortcuts           │
+│     │                     kopico-desktop <files>                           │
+│     ├── Tray (tray.rs)                                                     │
+│     ├── clipboard watcher (clipboard.rs) ── copied text ──┐                │
+│     └── Transfers (transfers.rs) ◀───────────────────────┘                │
+│            │  one croc code: receive OR send             notification.rs  │
+│            ▼                          ▲ events (async-channel)             │
+└────────────┼──────────────────────────┼────────────────────────────────────┘
+             ├── croc-receive thread: receive_loop (receiver.rs) runs croc again and again
+             └── croc-send thread:    run_send (sender.rs), one `croc send` at a time
 ```
 
 | File | Responsibility |
 |---|---|
-| `src/main.rs` | Startup, app actions, receiver lifecycle, window wiring, clipboard |
-| `src/receiver.rs` | The croc loop on a background thread; parses croc's output |
+| `src/main.rs` | Startup, app actions, window wiring, `open` → send files |
+| `src/transfers.rs` | Receive/send coordination: pause receiving, send queue, no echo |
+| `src/receiver.rs` | The croc receive loop on a background thread; parses croc's output |
+| `src/sender.rs` | One `croc send` (text or files) on a background thread |
+| `src/croc_names.rs` | Sends files whose names croc refuses under safe names (staged hard links) |
+| `src/clipboard.rs` | Write received text; watch for text the user copies |
+| `src/macos_services.rs` | Finder → Services → *Send with Kopico* (macOS) |
+| `src/macos_bundle.rs` | Release `.app` only: points GTK at the libraries' data bundled in `Contents/Resources` |
 | `src/tray.rs` | Tray / menu bar icon and menu |
 | `src/notification.rs` | System notifications (Linux: gio, macOS: notify-rust) |
 | `data/ui/window.blp` | The window (Blueprint) |
@@ -43,6 +51,8 @@ application in `setup_app()`:
 | `app.relay-password` | string | `""` | Own Relay |
 | `app.receive-code` | string | built-in default | croc code, ≥ 6 characters |
 | `app.sender-ip` | string | `""` | Local mode, optional `host[:port]` |
+| `app.send-clipboard` | bool | `true` | Advanced → *Send Copied Text* |
+| `app.send-files` | — | | Advanced → *Send Files…* (file chooser) |
 | `app.show-window`, `app.quit` | — | | tray *Settings* / *Quit*, `Ctrl/Cmd+Q` |
 
 Why actions:
@@ -62,14 +72,19 @@ current values.
 
 ## Lifecycle
 
-- **startup** (once per process): tray, actions, notification permission (macOS), receiver
-  start (Kopico starts enabled).
+- **startup** (once per process): tray, actions, notification permission (macOS), Finder
+  Services provider (macOS), clipboard watcher, receiver start (Kopico starts enabled).
+- **open** (files handed to Kopico): `Transfers::send_files` — the window is not shown.
+  On Linux a second `kopico-desktop <files>` forwards them to the running instance over
+  D-Bus. On macOS GApplication can't detect a running instance (no D-Bus), so files must
+  come through LaunchServices (Finder Open With / Services), which GTK delivers to the
+  running process.
 - **activate** (each launch / tray *Settings*): `show_window()` presents the one window,
   creating it on first use — never a second one.
 - **close button**: hides the window while the tray is on (`Propagation::Stop`); with the
   tray off it closes normally and the app exits.
-- **quit**: `app.quit()` → shutdown drops the tray (icon + hold guard) and stops the
-  receiver (kills croc) → the process exits with nothing left running.
+- **quit**: `app.quit()` → shutdown drops the tray (icon + hold guard), stops the receiver
+  and kills a running `croc send` → the process exits with nothing left running.
 
 The tray keeps an `ApplicationHoldGuard`, which is what keeps the process alive while
 every window is hidden.
@@ -80,6 +95,7 @@ every window is hidden.
 |---|---|
 | GTK main thread | everything touching widgets, actions, clipboard, notifications |
 | `croc-receive` | `receive_loop`: spawn croc, watch it, wait for the next poll |
+| `croc-send` | `run_send`: one `croc send`, watched until delivered / timed out / cancelled |
 | two reader threads per croc run | drain croc's stdout and stderr (a full pipe would block croc) |
 | tray menu thread (Linux `ksni`) | tray-icon delivers menu clicks here |
 
@@ -90,7 +106,10 @@ Crossing to the main thread:
   event arrives — no polling.
 - **Tray → app:** the menu item id is the action name; the click handler forwards only that
   string with `glib::idle_add_once`, which then activates `app.<id>` on the main thread.
+- **Sender → UI:** one `SendOutcome` per send over an `async-channel`; `Transfers` reports it
+  and starts the next send (or resumes receiving).
 - **macOS notifications:** sent with notify-rust's async API from a future on the GTK loop.
+- **macOS clipboard watching:** a 500 ms GLib timeout on the main thread (no thread).
 
 Stopping the receiver sets an `AtomicBool`; the loop notices within 200 ms, kills croc and
 exits, so turning Kopico off never blocks the UI.
@@ -102,7 +121,7 @@ One `Adw.ApplicationWindow` with a `ViewStack` of two tabs, switched from the he
 
 - **Home:** the power toggle and a status line.
 - **Advanced:** receive settings (relay mode, relay address/password, sender IP, receive
-  code, save folder) and *Show in System Tray*. Rows that don't apply to the selected mode
+  code, save folder), *Send* (*Send Copied Text*, *Send Files…*) and *Show in System Tray*. Rows that don't apply to the selected mode
   are hidden.
 
 Text fields apply on Enter or ✓. Toasts confirm saves and report received transfers.
