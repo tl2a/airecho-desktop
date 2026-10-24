@@ -1,6 +1,6 @@
 # Development
 
-Setting up, running, debugging and testing Kopico Desktop on Linux and macOS.
+Setting up, running, debugging and testing AirEcho on Linux and macOS.
 
 - [Toolchain and system libraries](#toolchain-and-system-libraries)
 - [Linux](#linux)
@@ -46,10 +46,10 @@ sudo apt install libgtk-4-dev libadwaita-1-dev blueprint-compiler libglib2.0-dev
 cargo run
 ```
 
-`dev-install.sh` copies `data/in.tl2a.kopico-desktop.desktop` to
-`~/.local/share/applications/` with `Exec=` pointing at `target/debug/kopico-desktop`.
+`dev-install.sh` copies `data/in.tl2a.airEcho.desktop` to
+`~/.local/share/applications/` with `Exec=` pointing at `target/debug/airecho`.
 GNOME Shell only shows notifications for apps it has a `.desktop` file for. It also
-installs the *Send with Kopico* right-click entries: a Nautilus extension in
+installs the *Send with AirEcho* right-click entries: a Nautilus extension in
 `~/.local/share/nautilus-python/extensions/` (needs `nautilus-python` /
 `python3-nautilus`; restart Files with `nautilus -q`), a Dolphin service menu in
 `~/.local/share/kio/servicemenus/`, a Nemo action in `~/.local/share/nemo/actions/`,
@@ -61,8 +61,8 @@ Optional:
 
 - **Tray icon on GNOME Shell:** install the *AppIndicator and KStatusNotifierItem Support*
   extension. KDE and most other desktops show tray icons without it.
-- **`wl-clipboard`** (Wayland): Kopico uses `wl-copy` to put received text on the
-  clipboard, which can work while Kopico's window is hidden. Without it, Kopico falls back
+- **`wl-clipboard`** (Wayland): AirEcho uses `wl-copy` to put received text on the
+  clipboard, which can work while AirEcho's window is hidden. Without it, AirEcho falls back
   to GTK's clipboard, which some compositors ignore for unfocused apps.
 
 ## macOS
@@ -92,42 +92,42 @@ Typical cause: a `PKG_CONFIG_PATH` in your shell profile that puts Homebrew's
 everything in `/opt/local`. Check a build with:
 
 ```sh
-otool -L target/debug/kopico-desktop   # every GTK/GLib line should be /opt/local/...
+otool -L target/debug/airecho   # every GTK/GLib line should be /opt/local/...
 ```
 
 ### Run
 
 ```sh
 cargo build
-./dev-install.sh   # once: creates "~/Applications/Kopico Desktop.app"
+./dev-install.sh   # once: creates "~/Applications/AirEcho.app"
 cargo run
 ```
 
-On macOS, `cargo run` doesn't start `target/debug/kopico-desktop` directly. The runner in
+On macOS, `cargo run` doesn't start `target/debug/airecho` directly. The runner in
 `.cargo/config.toml` calls `scripts/macos-app.sh`, which on every run:
 
-1. copies the fresh binary into `~/Applications/Kopico Desktop.app/Contents/MacOS/`
+1. copies the fresh binary into `~/Applications/AirEcho.app/Contents/MacOS/`
    (with `data/macos/Info.plist`),
 2. ad-hoc signs the bundle (`codesign --sign -`),
 3. registers it with LaunchServices (`lsregister`),
-4. starts Kopico from inside the bundle — output still goes to your terminal.
+4. starts AirEcho from inside the bundle — output still goes to your terminal.
 
 This is what makes notifications work: macOS only allows them for a **signed app bundle**
 (see [platform-decisions.md](platform-decisions.md#macos-notifications)). On the first
-start macOS asks to allow notifications; afterwards **Kopico Desktop** is listed in
+start macOS asks to allow notifications; afterwards **AirEcho** is listed in
 System Settings → Notifications. Permission is tied to the bundle id, so it survives
 rebuilds.
 
-Running `target/debug/kopico-desktop` directly still works — Kopico just logs that it is
+Running `target/debug/airecho` directly still works — AirEcho just logs that it is
 not in a bundle and skips notifications. Test binaries (`cargo test`) pass through the
 runner unchanged.
 
 ## How a build works
 
 ```
-data/ui/*.blp ──blueprint-compiler──▶ $OUT_DIR/data/ui/*.ui ─┐
+data/ui/*.blp ──blueprint-compiler──▶ $OUT_DIR/*.ui ─┐
 data/style.css ───────────────────────────────────────────────┼─glib-compile-resources─▶ .gresource
-data/in.tl2a.kopico-desktop.gresource.xml (manifest) ─────────┘                              │
+data/in.tl2a.airEcho.gresource.xml (manifest) ─────────┘                              │
                                                               include_bytes! in main.rs ◀────┘
 ```
 
@@ -141,7 +141,7 @@ also installs the `.desktop` file.
 ## Debugging
 
 ```sh
-KOPICO_DEBUG=1 cargo run
+AIRECHO_DEBUG=1 cargo run
 ```
 
 logs every croc run:
@@ -165,7 +165,7 @@ cargo test -- --ignored --test-threads=1    # end-to-end with real croc (receive
 
 The end-to-end tests start real `croc relay` / `croc send` processes on local ports and
 check: receiving a file through your own relay, receiving via `--ip`, receiving text
-byte-for-byte, the wait limit and stop latency, rate-limit detection, and Kopico's own
+byte-for-byte, the wait limit and stop latency, rate-limit detection, and AirEcho's own
 sending of text and files plus cancelling a waiting send. They need croc
 installed and free local ports 9009–9013 (croc send's own relay) and 9410–9434 (test
 relays).
@@ -186,11 +186,12 @@ doesn't see its own discovery broadcast. Test it with two devices on the same ne
 | No notifications on macOS / not in Settings → Notifications | Start with `cargo run` (or the `.app`), not `target/debug/…`; allow notifications when asked |
 | No tray icon on GNOME | Install the AppIndicator extension |
 | `croc is not installed or not on PATH` toast | Install croc, or put it in one of the folders listed in the README |
-| Copied text isn't sent | Kopico on? Advanced → *Send Copied Text* on? Password-manager copies are skipped by design. GNOME/Wayland: only while Kopico is focused |
-| "the receiver rejected the transfer" (croc: `peer error: refusing files`) | croc sends this for **any** error on the receiving side — its own output says which. Usual causes: a file name croc won't create (Kopico renames those, see [sending.md](sending.md#file-names-croc-refuses)), or a receiver without `--yes` and no terminal (it declines). Text is never affected |
+| Copied text isn't sent | AirEcho on? Advanced → *Send Copied Text* on? Password-manager copies are skipped by design. GNOME/Wayland: AirEcho prefers XWayland; without XWayland the native Wayland watcher only works while focused |
+| "the receiver rejected the transfer" (croc: `peer error: refusing files`) | croc sends this for **any** error on the receiving side — its own output says which. Usual causes: a file name croc won't create (AirEcho renames those, see [sending.md](sending.md#file-names-croc-refuses)), or a receiver without `--yes` and no terminal (it declines). Text is never affected |
 | "Not delivered: nobody picked up …" | The other side isn't receiving with the same code/mode — or (Local mode) can't reach this machine; give it this machine's IP as *Sender IP* |
-| No *Send with Kopico* in Finder | Start Kopico once with `cargo run` (registers the service), then check System Settings → Keyboard → Keyboard Shortcuts → Services → Files and Folders |
-| No *Send with Kopico* in Nautilus | Install `nautilus-python` (Fedora) or `python3-nautilus` (Debian/Ubuntu), run `./dev-install.sh`, then restart Nautilus with `nautilus -q` |
-| No *Send with Kopico* in Nemo | Run `./dev-install.sh`, then restart Nemo with `nemo -q` |
-| No *Send with Kopico* in Thunar | Run `./dev-install.sh`, then restart Thunar with `thunar -q`; check `~/.config/Thunar/uca.xml` for the Kopico action |
-| No *Send with Kopico* in Dolphin | Run `./dev-install.sh`; if it still does not appear, restart Dolphin or log out and back in |
+| No *Send with AirEcho* in Finder | Start AirEcho once with `cargo run` (registers the service), then check System Settings → Keyboard → Keyboard Shortcuts → Services → Files and Folders |
+| No *Send with AirEcho* in Nautilus | Install `nautilus-python` (Fedora) or `python3-nautilus` (Debian/Ubuntu), run `./dev-install.sh`, then restart Nautilus with `nautilus -q` |
+| No *Send with AirEcho* in Nemo | Run `./dev-install.sh`, then restart Nemo with `nemo -q` |
+| No *Send with AirEcho* in Thunar | Run `./dev-install.sh`, then restart Thunar with `thunar -q`; check `~/.config/Thunar/uca.xml` for the AirEcho action |
+| No *Send with AirEcho* in Dolphin | Run `./dev-install.sh`; if it still does not appear, restart Dolphin or log out and back in |
+| Copied text isn't detected while AirEcho is in the background on GNOME Wayland | AirEcho prefers XWayland when no `GDK_BACKEND` override is set. Ensure XWayland is available, fully quit and relaunch AirEcho, and check that the session provides `DISPLAY` |

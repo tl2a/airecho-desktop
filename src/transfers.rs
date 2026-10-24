@@ -1,14 +1,14 @@
 //! Coordinates receiving and sending — they share one croc code, so they can't overlap.
 //!
-//! - **Receiving** runs while Kopico is enabled ([`ReceiverHandle`]).
+//! - **Receiving** runs while AirEcho is enabled ([`ReceiverHandle`]).
 //! - **Sending** (copied text, files from Finder/Nautilus or the app) first stops the
-//!   receiver — with the same code it would receive Kopico's own transfer — then runs one
+//!   receiver — with the same code it would receive AirEcho's own transfer — then runs one
 //!   `croc send` at a time ([`SendHandle`]) and restarts the receiver when the queue is empty.
 //!   If a transfer is *coming in* at that moment, the send waits until it is done.
 //! - **Queue:** newer copied text replaces older text that nobody has picked up yet; files
 //!   are queued in order.
 //! - **No echo:** text that was just received or sent is not sent again. Without this, two
-//!   Kopicos would bounce a copy back and forth (receive → clipboard → "copy" → send …).
+//!   AirEcho instances would bounce a copy back and forth (receive → clipboard → "copy" → send …).
 
 use std::{cell::RefCell, collections::VecDeque, path::PathBuf, rc::Rc, time::Duration};
 
@@ -56,7 +56,7 @@ impl Transfers {
 
     // ── Receiving ──────────────────────────────────────────────────────────────
 
-    /// Start the receive loop if Kopico is enabled and nothing is being sent.
+    /// Start the receive loop if AirEcho is enabled and nothing is being sent.
     pub fn start_receiving(&self) {
         let Some(app) = self.app() else { return };
         {
@@ -122,7 +122,7 @@ impl Transfers {
         }
     }
 
-    /// Kopico switched on or off. Off also cancels pending sends of copied text.
+    /// AirEcho switched on or off. Off also cancels pending sends of copied text.
     pub fn set_enabled(&self, enabled: bool) {
         if enabled {
             self.start_receiving();
@@ -149,8 +149,8 @@ impl Transfers {
 
     // ── Sending ────────────────────────────────────────────────────────────────
 
-    /// The clipboard watcher saw a copy. Sent if Kopico is on, "Send Copied Text" is on,
-    /// and it isn't text Kopico itself just received or sent.
+    /// The clipboard watcher saw a copy. Sent if AirEcho is on, "Send Copied Text" is on,
+    /// and it isn't text AirEcho itself just received or sent.
     pub fn on_text_copied(&self, text: String) {
         let Some(app) = self.app() else { return };
         if !crate::action_bool(&app, crate::ACTION_ENABLED)
@@ -183,7 +183,7 @@ impl Transfers {
     }
 
     /// Send files/folders (Finder, Linux file-manager actions, Send Files…).
-    /// Works even while Kopico is switched off — it's an explicit request.
+    /// Works even while AirEcho is switched off — it's an explicit request.
     pub fn send_files(&self, files: Vec<PathBuf>) {
         let Some(app) = self.app() else { return };
         let files: Vec<PathBuf> = files.into_iter().filter(|f| f.exists()).collect();
@@ -261,7 +261,7 @@ impl Transfers {
                  (.git/.ssh/.gnupg folders, links pointing outside)"
             ),
             SendOutcome::NoReceiver => {
-                format!("Not delivered: nobody picked up {what}. Is Kopico running on the other device?")
+                format!("Not delivered: nobody picked up {what}. Is AirEcho running on the other device?")
             }
             SendOutcome::Cancelled if is_files => format!("Cancelled sending {what}"),
             SendOutcome::Cancelled => return, // replaced by newer copied text

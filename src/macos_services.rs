@@ -1,10 +1,10 @@
 //! macOS Services: Finder → right-click files → Quick Actions / Services →
-//! **"Send with Kopico"**.
+//! **"Send with AirEcho"**.
 //!
 //! `data/macos/Info.plist` declares the service (`NSServices`: message `sendFiles`, file
 //! types `public.item`); this module provides the object macOS calls. It reads the
 //! selected files from the pasteboard and hands them to `GApplication::open`, i.e. the same
-//! path as "Open With → Kopico Desktop" and `kopico-desktop <files>` on Linux.
+//! path as "Open With → AirEcho" and `airecho <files>` on Linux.
 //!
 //! A real Share-menu entry would need a Share Extension (separate sandboxed `.appex`,
 //! built with Xcode); a Service gives the same right-click entry without one.
@@ -23,7 +23,7 @@ define_class!(
     // SAFETY: NSObject has no subclassing requirements; no ivars, no Drop.
     #[unsafe(super(NSObject))]
     #[thread_kind = MainThreadOnly]
-    #[name = "KopicoServicesProvider"]
+    #[name = "AirEchoServicesProvider"]
     struct ServicesProvider;
 
     impl ServicesProvider {
@@ -36,7 +36,7 @@ define_class!(
             _error: *mut *mut NSString,
         ) {
             let files = file_paths(pasteboard);
-            println!("[services] Send with Kopico: {} item(s)", files.len());
+            println!("[services] Send with AirEcho: {} item(s)", files.len());
             if files.is_empty() {
                 return;
             }
@@ -63,7 +63,7 @@ thread_local! {
 /// Register the provider. Call once at startup on the main thread (after GTK init).
 pub fn register() {
     let Some(mtm) = MainThreadMarker::new() else {
-        eprintln!("[services] not on the main thread — Send with Kopico unavailable");
+        eprintln!("[services] not on the main thread — Send with AirEcho unavailable");
         return;
     };
     PROVIDER.with(|cell| {

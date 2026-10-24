@@ -1,23 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  macOS counterpart of data/in.tl2a.kopico-desktop.desktop.
-  dev-install.sh wraps the debug binary in "~/Applications/Kopico Desktop.app" with this
-  Info.plist and registers it, so notifications show as "Kopico Desktop" (the bundle id
+  macOS counterpart of data/in.tl2a.airEcho.desktop.
+  dev-install.sh wraps the debug binary in "~/Applications/AirEcho.app" with this
+  Info.plist and registers it, so notifications show as "AirEcho" (the bundle id
   must match APP_ID in src/main.rs).
 -->
 <plist version="1.0">
 <dict>
   <key>CFBundleIdentifier</key>
-  <string>in.tl2a.kopico-desktop</string>
+  <string>in.tl2a.airEcho</string>
   <key>CFBundleName</key>
-  <string>Kopico Desktop</string>
+  <string>AirEcho</string>
   <key>CFBundleDisplayName</key>
-  <string>Kopico Desktop</string>
+  <string>AirEcho</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>CFBundleExecutable</key>
-  <string>kopico-desktop</string>
+  <string>airecho</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
@@ -29,8 +29,8 @@
   <key>NSHighResolutionCapable</key>
   <true/>
 
-  <!-- Finder → right-click → Open With → Kopico Desktop sends the selection.
-       "Alternate" rank: Kopico is never offered as the default app for anything. -->
+  <!-- Finder → right-click → Open With → AirEcho sends the selection.
+       "Alternate" rank: AirEcho is never offered as the default app for anything. -->
   <key>CFBundleDocumentTypes</key>
   <array>
     <dict>
@@ -47,7 +47,7 @@
     </dict>
   </array>
 
-  <!-- Finder → right-click → Quick Actions / Services → "Send with Kopico".
+  <!-- Finder → right-click → Quick Actions / Services → "Send with AirEcho".
        Handled by src/macos_services.rs (sendFiles:userData:error:). NSRequiredContext
        makes it enabled by default. -->
   <key>NSServices</key>
@@ -56,12 +56,12 @@
       <key>NSMenuItem</key>
       <dict>
         <key>default</key>
-        <string>Send with Kopico</string>
+        <string>Send with AirEcho</string>
       </dict>
       <key>NSMessage</key>
       <string>sendFiles</string>
       <key>NSPortName</key>
-      <string>Kopico Desktop</string>
+      <string>AirEcho</string>
       <key>NSRequiredContext</key>
       <dict/>
       <key>NSSendFileTypes</key>

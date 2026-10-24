@@ -9,7 +9,7 @@
 //!
 //! `[mode]` follows the receive mode: `--local`, `--relay <address>` (own relay), or
 //! nothing (public relays). The receive loop must be stopped first — with the same code it
-//! would otherwise receive Kopico's own transfer (see `transfers.rs`).
+//! would otherwise receive AirEcho's own transfer (see `transfers.rs`).
 //!
 //! # What croc prints (verified against croc 11.5.4)
 //!
@@ -22,7 +22,7 @@
 //! a.txt 100% |████| (11/11 B, 270 B/s) 1/2        ← progress (files)
 //! ```
 //!
-//! A sender waits for a receiver indefinitely, so Kopico gives up after a mode-dependent
+//! A sender waits for a receiver indefinitely, so AirEcho gives up after a mode-dependent
 //! wait — but only *before* `Sending (->…)`: a transfer in progress is never killed.
 //! Exit status 0 means delivered. `--disable-clipboard` matters: without it croc copies
 //! the code to the clipboard, which the clipboard watcher would then try to send.
@@ -340,7 +340,7 @@ fn work_dir() -> std::io::Result<PathBuf> {
     let dir = dirs_next::runtime_dir()
         .or_else(dirs_next::cache_dir)
         .unwrap_or_else(std::env::temp_dir)
-        .join("kopico-send");
+        .join("airecho-send");
     std::fs::create_dir_all(&dir)?;
     #[cfg(unix)]
     {
@@ -396,7 +396,7 @@ fn watch_sender_stderr(mut stderr: impl Read, signals: mpsc::Sender<SenderSignal
 fn explain_failure(stdout_text: &str) -> String {
     // croc sends "refusing files" for *any* error on the receiving side: a declined
     // "Accept …? (Y/n)" (a receiver without --yes and no terminal declines), a name it
-    // won't create (Kopico avoids those, see croc_names), a full disk, …
+    // won't create (AirEcho avoids those, see croc_names), a full disk, …
     if stdout_text.contains("refusing files") {
         return "the receiver rejected the transfer \u{2014} its croc output shows why. \
                 A croc receiver also needs --yes to accept files"
@@ -456,7 +456,7 @@ mod tests {
     // ── End-to-end with real croc: cargo test -- --ignored --test-threads=1 ──────
 
     fn receive_once(code: &str, out: &std::path::Path) -> (bool, String) {
-        // Receiver dials the sender's built-in relay directly, like Kopico with a Sender IP
+        // Receiver dials the sender's built-in relay directly, like AirEcho with a Sender IP
         let output = Command::new(receiver::find_croc().expect("croc installed"))
             .args(["--yes", "--ignore-stdin", "--ip", "127.0.0.1", "--out"])
             .arg(out)
@@ -486,11 +486,11 @@ mod tests {
     #[test]
     #[ignore]
     fn sends_text_to_a_receiver() {
-        let out = std::env::temp_dir().join(format!("kopico-send-text-{}", std::process::id()));
+        let out = std::env::temp_dir().join(format!("airecho-send-text-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&out);
         std::fs::create_dir_all(&out).unwrap();
         let text = "line one\n  \"quoted\" $HOME ü€\n";
-        let code = format!("kopico-send-e2e-{}", std::process::id());
+        let code = format!("airecho-send-e2e-{}", std::process::id());
         let (outcome, received) = send_and_receive(SendJob::Text(text.into()), &code, &out);
         assert_eq!(outcome, SendOutcome::Delivered { left_out: 0 });
         assert_eq!(received, text, "receiver gets the text byte for byte");
@@ -499,7 +499,7 @@ mod tests {
     #[test]
     #[ignore]
     fn sends_files_to_a_receiver() {
-        let base = std::env::temp_dir().join(format!("kopico-send-files-{}", std::process::id()));
+        let base = std::env::temp_dir().join(format!("airecho-send-files-{}", std::process::id()));
         let (src, out) = (base.join("src"), base.join("out"));
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(&src).unwrap();
@@ -509,7 +509,7 @@ mod tests {
         // macOS screenshot style (U+202F before AM): croc's receiver refuses this name
         std::fs::write(src.join("Shot 10.15\u{202f}AM.png"), "png").unwrap();
         let job = SendJob::Files(vec![src.join("a.txt"), src.join("b file.txt"), src.join("Shot 10.15\u{202f}AM.png")]);
-        let code = format!("kopico-send-files-e2e-{}", std::process::id());
+        let code = format!("airecho-send-files-e2e-{}", std::process::id());
         let (outcome, _) = send_and_receive(job, &code, &out);
         assert_eq!(outcome, SendOutcome::Delivered { left_out: 0 });
         assert_eq!(std::fs::read_to_string(out.join("a.txt")).unwrap(), "aaa");
@@ -533,7 +533,7 @@ mod tests {
         let started = Instant::now();
         let job = SendJob::Text("nobody receives this".into());
         let mode = RelayMode::Local { sender_ip: None };
-        let outcome = run_send(&job, &mode, "kopico-cancel-e2e", &cancel, &connected, &Mutex::new(None));
+        let outcome = run_send(&job, &mode, "airecho-cancel-e2e", &cancel, &connected, &Mutex::new(None));
         assert_eq!(outcome, SendOutcome::Cancelled);
         let leftovers: Vec<_> = std::fs::read_dir(work_dir().unwrap())
             .unwrap()

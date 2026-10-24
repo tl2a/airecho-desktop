@@ -1,6 +1,6 @@
 # Sending
 
-How Kopico sends copied text and files with croc. Code: `src/transfers.rs` (coordination),
+How AirEcho sends copied text and files with croc. Code: `src/transfers.rs` (coordination),
 `src/sender.rs` (croc), `src/clipboard.rs` (watching copies), `src/macos_services.rs`
 (Finder menu).
 
@@ -8,11 +8,11 @@ How Kopico sends copied text and files with croc. Code: `src/transfers.rs` (coor
 
 | Trigger | Sent as | Needs |
 |---|---|---|
-| You **copy text** anywhere | `croc send --text "<text>"` | Kopico on + Advanced → *Send Copied Text* on (default) |
-| Finder → right-click → **Send with Kopico** (Services / Quick Actions) | `croc send <files>` | macOS, Kopico started from its bundle |
-| Finder → right-click → **Open With → Kopico Desktop** | `croc send <files>` | macOS |
-| Nautilus, Dolphin, Nemo, or Thunar → right-click → **Send with Kopico** | `croc send <files>` | Linux; `nautilus-python` for Nautilus; `./dev-install.sh` |
-| `kopico-desktop <files>` | `croc send <files>` | Linux (macOS: starts a second Kopico — use Finder) |
+| You **copy text** anywhere | `croc send --text "<text>"` | AirEcho on + Advanced → *Send Copied Text* on (default) |
+| Finder → right-click → **Send with AirEcho** (Services / Quick Actions) | `croc send <files>` | macOS, AirEcho started from its bundle |
+| Finder → right-click → **Open With → AirEcho** | `croc send <files>` | macOS |
+| Nautilus, Dolphin, Nemo, or Thunar → right-click → **Send with AirEcho** | `croc send <files>` | Linux; `nautilus-python` for Nautilus; `./dev-install.sh` |
+| `airecho <files>` | `croc send <files>` | Linux (macOS: starts a second AirEcho — use Finder) |
 | Advanced → **Send Files…** | `croc send <files>` | — |
 
 Every send uses the receive code and the receive mode:
@@ -22,7 +22,7 @@ CROC_SECRET=<code> croc --yes --ignore-stdin --disable-clipboard --local send --
                                                                  ^ --relay <addr> (own relay) / nothing (public)
 ```
 
-The other device just keeps receiving — e.g. another Kopico with the same code, or
+The other device just keeps receiving — e.g. another AirEcho with the same code, or
 `CROC_SECRET=<code> croc --ip <this-machine>:9009 --yes` by hand. **`--yes` is required
 for files:** without it, a croc receiver that has no terminal to ask in declines files
 (`peer error: refusing files` on the sending side) — text is never asked about.
@@ -44,7 +44,7 @@ Refused (croc's `receivefs` rules):
 | Names in one folder that differ only in case | `A.txt` + `a.txt` (Linux) |
 | A symlink with an absolute target or `..` | `link → /etc/hosts`, `link → ../x` |
 
-Kopico (`src/croc_names.rs`) checks every name before a send. Items that are fine are sent
+AirEcho (`src/croc_names.rs`) checks every name before a send. Items that are fine are sent
 from where they are. Any other item is **mirrored into the private send folder** with safe
 names — `U+202F`/no-break spaces → space, `:` `\` → `-`, invisible characters removed,
 trailing `.`/space trimmed, `_` before device names, ` (2)` for case clashes — using hard
@@ -55,30 +55,30 @@ Originals are never renamed or changed.
 
 ## Sending and receiving share one code
 
-A `croc send` and Kopico's own receive loop with the same code would find each other —
-Kopico would receive its own transfer. So `Transfers`:
+A `croc send` and AirEcho's own receive loop with the same code would find each other —
+AirEcho would receive its own transfer. So `Transfers`:
 
 1. **stops the receiver** before a send — but if a transfer is *coming in* right now
    (croc said `authenticating code…`), it waits for that to finish first;
 2. runs **one `croc send` at a time** from a queue;
-3. **restarts the receiver** once the queue is empty (if Kopico is on).
+3. **restarts the receiver** once the queue is empty (if AirEcho is on).
 
 Queue rules:
 
 - **Newer copied text replaces older text** that nobody has picked up yet (the waiting
   `croc send` is cancelled). Text already being transferred is not interrupted.
-- **Files are queued** in order and always sent, even while Kopico is switched off — they
+- **Files are queued** in order and always sent, even while AirEcho is switched off — they
   are an explicit request.
-- Switching Kopico **off** cancels copied-text sends; **quitting** kills any running
+- Switching AirEcho **off** cancels copied-text sends; **quitting** kills any running
   `croc send` (nothing keeps running in the background).
 
 ## No echo
 
-Two Kopicos with the same code would otherwise bounce text forever: A copies → B receives
+Two AirEcho instances with the same code would otherwise bounce text forever: A copies → B receives
 and puts it on its clipboard → B's watcher sees a "copy" → B sends it back → …
 
-Kopico remembers the last text it **received or sent**; a clipboard change to exactly that
-text is not a new copy. This also covers Kopico's own clipboard write when text arrives,
+AirEcho remembers the last text it **received or sent**; a clipboard change to exactly that
+text is not a new copy. This also covers AirEcho's own clipboard write when text arrives,
 and copying the same text twice.
 
 ## Watching the clipboard
@@ -87,15 +87,17 @@ and copying the same text twice.
 |---|---|---|
 | macOS | checks `NSPasteboard.changeCount` every 500 ms (macOS has no change notification; clipboard managers poll the same way) | — |
 | Linux, X11 | GDK `changed` signal | — |
-| Linux, Wayland | GDK `changed` signal | GNOME (no data-control protocol): only while Kopico's window has focus |
+| Linux, Wayland | GDK `changed` signal | GNOME prefers XWayland, with Wayland fallback; without XWayland, GNOME only reports copies while AirEcho is focused |
 
-Copies that existed before Kopico started are not sent. Content marked **private** by
-password managers is never sent: `org.nspasteboard.ConcealedType` / `TransientType` /
-`AutoGeneratedType` on macOS (1Password, Bitwarden, KeePassXC, … set these), and
-`x-kde-passwordManagerHint` on KDE. Text over **64 KB** is not sent (it is passed to croc
-as a command-line argument).
+When AirEcho's window first gets focus, the clipboard watcher reads the current clipboard
+before listening for changes; that existing text is not sent. Only a subsequent clipboard
+text change triggers sending (when *Send Copied Text* is enabled). Content marked **private**
+by password managers is never sent:
+`org.nspasteboard.ConcealedType` / `TransientType` / `AutoGeneratedType` on macOS
+(1Password, Bitwarden, KeePassXC, … set these), and `x-kde-passwordManagerHint` on KDE.
+Text over **64 KB** is not sent (it is passed to croc as a command-line argument).
 
-## croc's sender, as Kopico reads it
+## croc's sender, as AirEcho reads it
 
 Verified against **croc 11.5.4**:
 
@@ -112,13 +114,13 @@ a.txt 100% |████| (11/11 B, …) 1/2           ← progress (files)
   30 s).
 - **`--disable-clipboard`** is required: by default croc copies the code to the clipboard,
   which the watcher would then send.
-- stderr contains the code, so it is never logged; `KOPICO_DEBUG=1` logs
+- stderr contains the code, so it is never logged; `AIRECHO_DEBUG=1` logs
   `[croc-send] run: copied text (…, code: N chars)` and the outcome, never the text.
 - A killed `croc send` takes ~2 s to exit (measured); cancelling therefore completes ~2 s
   later, off the UI thread.
 - **`--text` leaves the text on disk when killed:** croc writes it to `croc-stdin-<n>` in
-  its working directory and deletes it only after a delivered send. Kopico runs croc in a
-  private folder (`$XDG_RUNTIME_DIR/kopico-send` on Linux, `~/Library/Caches/kopico-send`
+  its working directory and deletes it only after a delivered send. AirEcho runs croc in a
+  private folder (`$XDG_RUNTIME_DIR/airecho-send` on Linux, `~/Library/Caches/airecho-send`
   on macOS, mode 700) and deletes `croc-stdin-*` there before and after every send.
 - `--local` sends start croc's own relay on ports 9009–9013 — the other side's *Sender
   IP* points there.

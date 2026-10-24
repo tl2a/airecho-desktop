@@ -1,6 +1,6 @@
 # Architecture
 
-How Kopico Desktop is put together. For the croc side in detail see
+How AirEcho is put together. For the croc side in detail see
 [receiver.md](receiver.md); for platform-specific choices see
 [platform-decisions.md](platform-decisions.md).
 
@@ -12,7 +12,7 @@ How Kopico Desktop is put together. For the croc side in detail see
 │  AdwApplication ── app actions (the app's state) ──┬── window              │
 │     │  │           enabled, tray, relay-mode, …    ├── tray menu           │
 │     │  └─ open(files) ◀── Finder / Nautilus /      └── shortcuts           │
-│     │                     kopico-desktop <files>                           │
+│     │                     airecho <files>                           │
 │     ├── Tray (tray.rs)                                                     │
 │     ├── clipboard watcher (clipboard.rs) ── copied text ──┐                │
 │     └── Transfers (transfers.rs) ◀───────────────────────┘                │
@@ -31,7 +31,7 @@ How Kopico Desktop is put together. For the croc side in detail see
 | `src/sender.rs` | One `croc send` (text or files) on a background thread |
 | `src/croc_names.rs` | Sends files whose names croc refuses under safe names (staged hard links) |
 | `src/clipboard.rs` | Write received text; watch for text the user copies |
-| `src/macos_services.rs` | Finder → Services → *Send with Kopico* (macOS) |
+| `src/macos_services.rs` | Finder → Services → *Send with AirEcho* (macOS) |
 | `src/macos_bundle.rs` | Release `.app` only: points GTK at the libraries' data bundled in `Contents/Resources` |
 | `src/tray.rs` | Tray / menu bar icon and menu |
 | `src/notification.rs` | System notifications (Linux: gio, macOS: notify-rust) |
@@ -73,9 +73,9 @@ current values.
 ## Lifecycle
 
 - **startup** (once per process): tray, actions, notification permission (macOS), Finder
-  Services provider (macOS), clipboard watcher, receiver start (Kopico starts enabled).
-- **open** (files handed to Kopico): `Transfers::send_files` — the window is not shown.
-  On Linux a second `kopico-desktop <files>` forwards them to the running instance over
+  Services provider (macOS), clipboard watcher, receiver start (AirEcho starts enabled).
+- **open** (files handed to AirEcho): `Transfers::send_files` — the window is not shown.
+  On Linux a second `airecho <files>` forwards them to the running instance over
   D-Bus. On macOS GApplication can't detect a running instance (no D-Bus), so files must
   come through LaunchServices (Finder Open With / Services), which GTK delivers to the
   running process.
@@ -112,7 +112,7 @@ Crossing to the main thread:
 - **macOS clipboard watching:** a 500 ms GLib timeout on the main thread (no thread).
 
 Stopping the receiver sets an `AtomicBool`; the loop notices within 200 ms, kills croc and
-exits, so turning Kopico off never blocks the UI.
+exits, so turning AirEcho off never blocks the UI.
 
 ## UI
 

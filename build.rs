@@ -3,8 +3,8 @@
 ///
 /// Pipeline:
 ///   data/ui/*.blp
-///     --[blueprint-compiler compile]--> $OUT_DIR/data/ui/*.ui
-///     --[glib-compile-resources]------> $OUT_DIR/kopico-desktop.gresource
+///     --[blueprint-compiler compile]--> $OUT_DIR/*.ui
+///     --[glib-compile-resources]------> $OUT_DIR/airecho.gresource
 ///
 /// The gresource is then linked into the binary via the `gio::resources_register_include!`
 /// macro in main.rs.
@@ -15,7 +15,7 @@ use std::{
     process::Command,
 };
 
-const APP_ID: &str = "in.tl2a.kopico-desktop";
+const APP_ID: &str = "in.tl2a.airEcho";
 
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -24,10 +24,6 @@ fn main() {
     // ── Locate tools ──────────────────────────────────────────────────────────
     let blueprint_compiler = find_binary("blueprint-compiler");
     let glib_compile_resources = find_binary("glib-compile-resources");
-
-    // ── Prepare output directories ────────────────────────────────────────────
-    let out_ui_dir = out_dir.join("data").join("ui");
-    fs::create_dir_all(&out_ui_dir).expect("create out/data/ui");
 
     // ── Compile each .blp → .ui ───────────────────────────────────────────────
     let blp_src_dir = manifest_dir.join("data").join("ui");
@@ -40,7 +36,7 @@ fn main() {
 
     for blp in &blp_files {
         let stem = blp.file_stem().unwrap().to_str().unwrap();
-        let ui_out = out_ui_dir.join(format!("{stem}.ui"));
+        let ui_out = out_dir.join(format!("{stem}.ui"));
 
         println!("cargo:rerun-if-changed={}", blp.display());
 
@@ -62,6 +58,18 @@ fn main() {
         .join(format!("{APP_ID}.gresource.xml"));
 
     println!("cargo:rerun-if-changed={}", gresource_xml.display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_dir
+            .join("data/icons/in.tl2a.airEcho-status-icon-active.svg")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_dir
+            .join("data/icons/in.tl2a.airEcho-status-icon-inactive.svg")
+            .display()
+    );
 
     let gresource_out = out_dir.join(format!("{APP_ID}.gresource"));
 
@@ -71,10 +79,7 @@ fn main() {
 
     // Generated .ui files are looked up first, then hand-written files in data/
     let status = Command::new(&glib_compile_resources)
-        .arg(format!(
-            "--sourcedir={}",
-            out_dir.join("data").display()
-        ))
+        .arg(format!("--sourcedir={}", out_dir.display()))
         .arg(format!("--sourcedir={}", data_src_dir.display()))
         .arg(format!("--target={}", gresource_out.display()))
         .arg(&gresource_xml)
@@ -126,4 +131,3 @@ fn which_simple(name: &str) -> Result<PathBuf, ()> {
     }
     Err(())
 }
-

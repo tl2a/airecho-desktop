@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use adw::prelude::*;
@@ -25,7 +25,7 @@ use receiver::RelayMode;
 use transfers::Transfers;
 use tray::{ACTION_ENABLED, ACTION_QUIT, ACTION_SHOW_WINDOW, ACTION_TRAY, Tray};
 
-const APP_ID: &str = "in.tl2a.kopico-desktop";
+const APP_ID: &str = "in.tl2a.airEcho";
 
 /// Default receive code.  Both sender and receiver must agree on this value.
 /// Users can override it in Advanced → Receive Code.
@@ -49,6 +49,9 @@ const ACTION_SEND_FILES: &str = "send-files";
 const RELAY_MODES: [&str; 3] = ["local", "own-relay", "public-relay"];
 
 fn main() -> gtk4::glib::ExitCode {
+    #[cfg(target_os = "linux")]
+    configure_gnome_wayland_backend();
+
     #[cfg(target_os = "macos")]
     macos_bundle::setup_environment();
 
@@ -62,17 +65,104 @@ fn main() -> gtk4::glib::ExitCode {
         .flags(gio::ApplicationFlags::HANDLES_OPEN)
         .build();
     let transfers = Transfers::new(&app);
+    let clipboard_watch_status = Rc::new(Cell::new(ClipboardWatchStatus::NotStarted));
     {
         let transfers = transfers.clone();
         app.connect_startup(move |app| setup_app(app, &transfers));
     }
-    app.connect_activate(show_window);
-    // Files handed to Kopico — Finder "Send with Kopico" / "Open With", Linux file-manager
-    // actions, or `kopico-desktop <files>` — are sent, not opened.
+    {
+        let transfers = transfers.clone();
+        let clipboard_watch_status = clipboard_watch_status.clone();
+        app.connect_activate(move |app| {
+            show_window(app);
+            let Some(window) = app
+                .windows()
+                .into_iter()
+                .find_map(|window| window.downcast::<ApplicationWindow>().ok())
+            else {
+                eprintln!("[clipboard] no application window — clipboard watching not started");
+                return;
+            };
+
+            if window.is_active() {
+                start_clipboard_watch(&clipboard_watch_status, &transfers);
+            } else if clipboard_watch_status.get() == ClipboardWatchStatus::NotStarted {
+                clipboard_watch_status.set(ClipboardWatchStatus::WaitingForFocus);
+                let clipboard_watch_status = clipboard_watch_status.clone();
+                let transfers = transfers.clone();
+                window.connect_is_active_notify(move |window| {
+                    if window.is_active() {
+                        start_clipboard_watch(&clipboard_watch_status, &transfers);
+                    }
+                });
+            }
+        });
+    }
+    // Files handed to AirEcho — Finder "Send with AirEcho" / "Open With", Linux file-manager
+    // actions, or `airecho <files>` — are sent, not opened.
     app.connect_open(move |_, files, _hint| {
         transfers.send_files(files.iter().filter_map(|f| f.path()).collect());
     });
     app.run()
+}
+
+#[cfg(target_os = "linux")]
+fn configure_gnome_wayland_backend() {
+    if should_prefer_x11(
+        std::env::var("XDG_CURRENT_DESKTOP").ok().as_deref(),
+        std::env::var_os("WAYLAND_DISPLAY").is_some(),
+        std::env::var_os("GDK_BACKEND").is_some(),
+    ) {
+        eprintln!("[platform] GNOME Wayland detected; preferring XWayland with Wayland fallback");
+        // SAFETY: this runs at process startup before GTK initialization or any threads.
+        unsafe { std::env::set_var("GDK_BACKEND", "x11,wayland") };
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn should_prefer_x11(
+    current_desktop: Option<&str>,
+    has_wayland_display: bool,
+    has_backend_override: bool,
+) -> bool {
+    !has_backend_override
+        && has_wayland_display
+        && current_desktop.is_some_and(|desktops| {
+            desktops
+                .split(':')
+                .any(|desktop| desktop.eq_ignore_ascii_case("GNOME"))
+        })
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ClipboardWatchStatus {
+    NotStarted,
+    WaitingForFocus,
+    Started,
+}
+
+fn start_clipboard_watch(status: &Cell<ClipboardWatchStatus>, transfers: &Transfers) {
+    if status.replace(ClipboardWatchStatus::Started) == ClipboardWatchStatus::Started {
+        return;
+    }
+    // GDK may expose the existing Wayland clipboard only after the window becomes active.
+    let transfers = transfers.clone();
+    clipboard::watch(Box::new(move |text| transfers.on_text_copied(text)));
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod platform_tests {
+    use super::should_prefer_x11;
+
+    #[test]
+    fn prefers_x11_only_for_gnome_wayland_without_an_override() {
+        assert!(should_prefer_x11(Some("GNOME"), true, false));
+        assert!(should_prefer_x11(Some("KDE:GNOME"), true, false));
+        assert!(!should_prefer_x11(Some("KDE"), true, false));
+        assert!(!should_prefer_x11(Some("GNOME"), false, false));
+        assert!(!should_prefer_x11(Some("GNOME"), true, true));
+        assert!(!should_prefer_x11(None, true, false));
+    }
 }
 
 /// Current value of a boolean stateful action.
@@ -110,7 +200,7 @@ fn receiver_config(app: &Application) -> Result<(RelayMode, String), String> {
     Ok((mode, action_string(app, ACTION_RECEIVE_CODE)))
 }
 
-/// "“photo.jpg” saved to ~/Downloads/Kopico" / "3 items saved to …".
+/// "“photo.jpg” saved to ~/Downloads/AirEcho" / "3 items saved to …".
 fn received_message(names: &[String], out_dir: &std::path::Path) -> String {
     let dir = receiver::display_path(out_dir);
     match names {
@@ -158,11 +248,7 @@ fn setup_app(app: &Application, transfers: &Transfers) {
     tray::install_menu_handler();
     notification::init(); // macOS: permission prompt on first run
     #[cfg(target_os = "macos")]
-    macos_services::register(); // Finder → Services → "Send with Kopico"
-    {
-        let transfers = transfers.clone();
-        clipboard::watch(Box::new(move |text| transfers.on_text_copied(text)));
-    }
+    macos_services::register(); // Finder → Services → "Send with AirEcho"
 
     // ── app.enabled — power toggle + tray checkbox ────────────────────────────
     let enabled_action = gio::SimpleAction::new_stateful(ACTION_ENABLED, None, &true.to_variant());
@@ -179,7 +265,7 @@ fn setup_app(app: &Application, transfers: &Transfers) {
             if let Some(t) = tray.borrow().as_ref() {
                 t.set_enabled(enabled);
             }
-            println!("Kopico {}", if enabled { "enabled" } else { "disabled" });
+            println!("AirEcho {}", if enabled { "enabled" } else { "disabled" });
 
             // Start / stop the croc receive loop (off also cancels sending copied text)
             transfers.set_enabled(enabled);
@@ -262,7 +348,11 @@ fn setup_app(app: &Application, transfers: &Transfers) {
     }
 
     // ── app.send-clipboard — send copied text (on by default) ──────────────────
-    app.add_action(&gio::SimpleAction::new_stateful(ACTION_SEND_CLIPBOARD, None, &true.to_variant()));
+    app.add_action(&gio::SimpleAction::new_stateful(
+        ACTION_SEND_CLIPBOARD,
+        None,
+        &true.to_variant(),
+    ));
 
     // ── app.send-files — pick files in a dialog and send them ─────────────────
     let send_files_action = gio::SimpleAction::new(ACTION_SEND_FILES, None);
@@ -285,7 +375,7 @@ fn setup_app(app: &Application, transfers: &Transfers) {
     }
     app.add_action(&send_files_action);
 
-    // Kopico starts enabled → start receiving right away (Local mode by default)
+    // AirEcho starts enabled → start receiving right away (Local mode by default)
     transfers.start_receiving();
 
     {
@@ -309,7 +399,7 @@ fn show_window(app: &Application) {
 }
 
 fn build_ui(app: &Application) -> ApplicationWindow {
-    let builder = gtk4::Builder::from_resource("/in/tl2a/kopico-desktop/ui/window.ui");
+    let builder = gtk4::Builder::from_resource("/in/tl2a/airEcho/ui/window.ui");
 
     let window: ApplicationWindow   = builder.object("window").expect("window");
     let state_title: Label          = builder.object("state_title").expect("state_title");
@@ -331,13 +421,13 @@ fn build_ui(app: &Application) -> ApplicationWindow {
     // ── Home: status text follows app.enabled ─────────────────────────────────
     let update_state_text = move |enabled: bool| {
         if enabled {
-            state_title.set_label("Kopico Is On");
+            state_title.set_label("AirEcho Is On");
             state_description.set_label(
                 "Receiving files in the background. Turn off anytime from here or the tray.",
             );
         } else {
-            state_title.set_label("Kopico Is Off");
-            state_description.set_label("Kopico is paused. Turn it on to start receiving.");
+            state_title.set_label("AirEcho Is Off");
+            state_description.set_label("AirEcho is paused. Turn it on to start receiving.");
         }
     };
     update_state_text(action_bool(app, ACTION_ENABLED));
@@ -429,7 +519,7 @@ fn build_ui(app: &Application) -> ApplicationWindow {
             let show = row.is_active();
             app.change_action_state(ACTION_TRAY, &show.to_variant());
             if !show {
-                toast.add_toast(Toast::new("Closing the window will now quit Kopico"));
+                toast.add_toast(Toast::new("Closing the window will now quit AirEcho"));
             }
         });
     }
@@ -441,7 +531,7 @@ fn build_ui(app: &Application) -> ApplicationWindow {
             .is_some_and(|app| action_bool(&app, ACTION_TRAY));
         if in_tray {
             window.set_visible(false);
-            println!("Window hidden — Kopico is still running in the tray");
+            println!("Window hidden — AirEcho is still running in the tray");
             glib::Propagation::Stop
         } else {
             glib::Propagation::Proceed

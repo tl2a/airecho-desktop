@@ -72,10 +72,14 @@ const BACKOFF_RATE_LIMITED: Duration = Duration::from_secs(60);
 /// How often the loop checks whether it has been asked to stop.
 const TICK: Duration = Duration::from_millis(200);
 
-/// `KOPICO_DEBUG=1` logs every croc run (command, exit status, output, outcome).
+/// `AIRECHO_DEBUG=1` logs every croc run (command, exit status, output, outcome).
 pub(crate) fn debug_enabled() -> bool {
     static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ENABLED.get_or_init(|| std::env::var_os("KOPICO_DEBUG").is_some_and(|v| v != "0"))
+    *ENABLED.get_or_init(|| {
+        std::env::var_os("AIRECHO_DEBUG")
+            .or_else(|| std::env::var_os("KOPICO_DEBUG"))
+            .is_some_and(|value| value != "0")
+    })
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────────
@@ -184,12 +188,12 @@ impl Drop for ReceiverHandle {
     }
 }
 
-/// Default output folder: `~/Downloads/Kopico`.
+/// Default output folder: `~/Downloads/AirEcho`.
 pub fn default_out_dir() -> PathBuf {
     dirs_next::download_dir()
         .or_else(dirs_next::home_dir)
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("Kopico")
+        .join("AirEcho")
 }
 
 /// `path` with the home folder shown as `~`, for display in the UI.
@@ -625,7 +629,7 @@ mod tests {
     }
 
     fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("kopico-test-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("airecho-test-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -654,17 +658,17 @@ mod tests {
         let (_relay, mode) = start_relay(9410, &[]);
         let src = temp_dir("send");
         let out = temp_dir("recv");
-        std::fs::write(src.join("hello kopico.txt"), "hi").unwrap();
+        std::fs::write(src.join("hello airecho.txt"), "hi").unwrap();
         // A file that already exists in the output folder must not be overwritten
-        std::fs::write(out.join("hello kopico.txt"), "keep me").unwrap();
+        std::fs::write(out.join("hello airecho.txt"), "keep me").unwrap();
 
-        let code = format!("kopico-e2e-{}", std::process::id());
+        let code = format!("airecho-e2e-{}", std::process::id());
         let RelayMode::OwnRelay { address, .. } = &mode else { unreachable!() };
         let _sender = KillOnDrop(
             Command::new(croc())
                 .args(["--yes", "--ignore-stdin", "--disable-clipboard", "--relay", address, "send"])
                 .current_dir(std::env::temp_dir())
-                .arg(src.join("hello kopico.txt"))
+                .arg(src.join("hello airecho.txt"))
                 .env("CROC_SECRET", &code)
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
@@ -696,8 +700,8 @@ mod tests {
 
         let ReceiverEvent::Received(names) = event else { panic!("unexpected {event:?}") };
         assert_eq!(names.len(), 1, "exactly the new file is reported: {names:?}");
-        assert_ne!(names[0], "hello kopico.txt", "--rename keeps the existing file");
-        assert_eq!(std::fs::read_to_string(out.join("hello kopico.txt")).unwrap(), "keep me");
+        assert_ne!(names[0], "hello airecho.txt", "--rename keeps the existing file");
+        assert_eq!(std::fs::read_to_string(out.join("hello airecho.txt")).unwrap(), "keep me");
         assert_eq!(std::fs::read_to_string(out.join(&names[0])).unwrap(), "hi");
     }
 
@@ -707,7 +711,7 @@ mod tests {
         let src = temp_dir("ip-send");
         let out = temp_dir("ip-recv");
         std::fs::write(src.join("via ip.txt"), "direct").unwrap();
-        let code = format!("kopico-ip-e2e-{}", std::process::id());
+        let code = format!("airecho-ip-e2e-{}", std::process::id());
 
         // A plain `croc send` runs its own relay on port 9009 — that's what --ip reaches
         let mut sender = Command::new(croc())
@@ -755,7 +759,7 @@ mod tests {
     fn text_message_is_received_exactly() {
         let out = temp_dir("text");
         let text = "line one\n  indented \"quoted\" $HOME ü€\nlast line\n";
-        let code = format!("kopico-text-e2e-{}", std::process::id());
+        let code = format!("airecho-text-e2e-{}", std::process::id());
 
         let mut sender = Command::new(croc())
             .args(["--yes", "--ignore-stdin", "--disable-clipboard", "send", "--text", text])
@@ -794,7 +798,7 @@ mod tests {
 
         // Nobody sending: croc waits in the relay room until our limit ends the run
         let started = Instant::now();
-        let outcome = run_croc(&croc(), &running, &mode, &out, "kopico-nobody-sends").unwrap();
+        let outcome = run_croc(&croc(), &running, &mode, &out, "airecho-nobody-sends").unwrap();
         let took = started.elapsed();
         assert!(matches!(outcome, Outcome::NoSender), "{outcome:?}");
         assert!(took >= WAIT_OWN_RELAY && took < WAIT_OWN_RELAY + Duration::from_secs(3), "{took:?}");
@@ -811,7 +815,7 @@ mod tests {
         // (fresh code: re-joining the room of the croc killed above makes the relay drop
         // the connection, and croc then spends ~1 s exiting on its own)
         let started = Instant::now();
-        let outcome = run_croc(&croc(), &running, &mode, &out, "kopico-nobody-sends-2").unwrap();
+        let outcome = run_croc(&croc(), &running, &mode, &out, "airecho-nobody-sends-2").unwrap();
         assert!(matches!(outcome, Outcome::Stopped), "{outcome:?}");
         assert!(started.elapsed() < Duration::from_secs(2), "{:?}", started.elapsed());
     }
@@ -826,7 +830,7 @@ mod tests {
 
         let mut outcomes = Vec::new();
         for _ in 0..3 {
-            let outcome = run_croc(&croc(), &running, &mode, &out, "kopico-rate-limit").unwrap();
+            let outcome = run_croc(&croc(), &running, &mode, &out, "airecho-rate-limit").unwrap();
             let limited = matches!(outcome, Outcome::RateLimited);
             outcomes.push(outcome);
             if limited {

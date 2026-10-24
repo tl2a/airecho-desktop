@@ -4,8 +4,8 @@
 //! `app.activate_action(id)` on the GTK main thread. The actions themselves are
 //! registered in `main.rs`, which keeps all application logic in one place.
 
-use adw::Application;
 use adw::prelude::*;
+use adw::Application;
 use gtk4::{gio, glib};
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
@@ -43,7 +43,7 @@ impl Tray {
 
         let icon = TrayIconBuilder::new()
             .with_menu(Box::new(menu))
-            .with_tooltip("Kopico Desktop")
+            .with_tooltip("AirEcho")
             .build()
             .expect("failed to create tray icon");
 
@@ -57,25 +57,14 @@ impl Tray {
         tray
     }
 
-    /// Mirror the `app.enabled` state: "Enable" checkmark + green / normal icon.
+    /// Mirror the `app.enabled` state in the menu checkmark and status icon.
     pub fn set_enabled(&self, enabled: bool) {
         self.enable_item.set_checked(enabled);
         self.set_icon(enabled);
     }
 
     fn set_icon(&self, enabled: bool) {
-        let result = if enabled {
-            // Drawn as-is (never a template), so the green survives on macOS too
-            self.icon.set_icon(Some(tray_icon_image(GREEN)))
-        } else {
-            // macOS: template image, recoloured by the menu bar (light/dark aware)
-            #[cfg(target_os = "macos")]
-            let result = self.icon.set_icon_templated(Some(tray_icon_image(NORMAL)));
-            #[cfg(not(target_os = "macos"))]
-            let result = self.icon.set_icon(Some(tray_icon_image(NORMAL)));
-            result
-        };
-        if let Err(err) = result {
+        if let Err(err) = self.icon.set_icon(Some(tray_icon_image(enabled))) {
             eprintln!("Failed to update tray icon: {err}");
         }
     }
@@ -97,24 +86,39 @@ pub fn install_menu_handler() {
     }));
 }
 
-/// Enabled: GNOME palette green.
-const GREEN: [u8; 3] = [0x2e, 0xc2, 0x7e];
-/// Disabled: black template on macOS (menu bar recolours it), Adwaita blue elsewhere.
-const NORMAL: [u8; 3] = if cfg!(target_os = "macos") { [0, 0, 0] } else { [0x35, 0x84, 0xe4] };
+fn tray_icon_image(enabled: bool) -> Icon {
+    use gtk4::gdk::prelude::*;
 
-/// A 32×32 ring with a centre dot in the given colour.
-fn tray_icon_image(colour: [u8; 3]) -> Icon {
-    const SIZE: u32 = 32;
-
-    let centre = (SIZE as f32 - 1.0) / 2.0;
-    let mut rgba = Vec::with_capacity((SIZE * SIZE * 4) as usize);
-    for y in 0..SIZE {
-        for x in 0..SIZE {
-            let d = ((x as f32 - centre).powi(2) + (y as f32 - centre).powi(2)).sqrt();
-            let on = (11.0..=15.0).contains(&d) || d <= 5.0;
-            rgba.extend_from_slice(&colour);
-            rgba.push(if on { 0xff } else { 0x00 });
+    let name = if enabled {
+        "in.tl2a.airEcho-status-icon-active.svg"
+    } else {
+        "in.tl2a.airEcho-status-icon-inactive.svg"
+    };
+    let path = format!("/in/tl2a/airEcho/icons/{name}");
+    let bytes = gio::resources_lookup_data(&path, gio::ResourceLookupFlags::NONE)
+        .unwrap_or_else(|err| panic!("failed to load AirEcho tray icon {name}: {err}"));
+    let texture = gtk4::gdk::Texture::from_bytes(&bytes)
+        .unwrap_or_else(|err| panic!("failed to decode AirEcho tray icon {name}: {err}"));
+    let width = texture.width() as u32;
+    let height = texture.height() as u32;
+    let stride = width as usize * 4;
+    let mut bgra = vec![0; stride * height as usize];
+    texture.download(&mut bgra, stride);
+    let mut rgba = Vec::with_capacity(bgra.len());
+    for pixel in bgra.chunks_exact(4) {
+        let alpha = pixel[3];
+        if alpha == 0 {
+            rgba.extend_from_slice(&[0, 0, 0, 0]);
+        } else {
+            let unpremultiply =
+                |channel: u8| ((u16::from(channel) * 255 / u16::from(alpha)).min(255)) as u8;
+            rgba.extend_from_slice(&[
+                unpremultiply(pixel[2]),
+                unpremultiply(pixel[1]),
+                unpremultiply(pixel[0]),
+                alpha,
+            ]);
         }
     }
-    Icon::from_rgba(rgba, SIZE, SIZE).expect("valid tray icon")
+    Icon::from_rgba(rgba, width, height).expect("valid AirEcho tray icon")
 }

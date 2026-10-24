@@ -4,10 +4,10 @@ Release binaries are built by [`.github/workflows/release.yml`](../.github/workf
 
 | Platform | File | Built on | GTK from |
 |---|---|---|---|
-| macOS, Apple Silicon | `Kopico_Desktop-<version>-arm64.dmg` | `macos-15` | Homebrew (bottles) |
-| macOS, Intel | `Kopico_Desktop-<version>-x86_64.dmg` | `macos-15-intel` | MacPorts, `gtk4 +quartz` |
-| Linux, ARM | `Kopico_Desktop-<version>-aarch64.AppImage` | `ubuntu-24.04-arm`, `ubuntu:26.04` container | Ubuntu 26.04 |
-| Linux, x86_64 | `Kopico_Desktop-<version>-x86_64.AppImage` | `ubuntu-24.04`, `ubuntu:26.04` container | Ubuntu 26.04 |
+| macOS, Apple Silicon | `AirEcho_Desktop-<version>-arm64.dmg` | `macos-15` | Homebrew (bottles) |
+| macOS, Intel | `AirEcho_Desktop-<version>-x86_64.dmg` | `macos-15-intel` | MacPorts, `gtk4 +quartz` |
+| Linux, ARM | `AirEcho_Desktop-<version>-aarch64.AppImage` | `ubuntu-24.04-arm`, `ubuntu:26.04` container | Ubuntu 26.04 |
+| Linux, x86_64 | `AirEcho_Desktop-<version>-x86_64.AppImage` | `ubuntu-24.04`, `ubuntu:26.04` container | Ubuntu 26.04 |
 
 ## How to release
 
@@ -23,12 +23,12 @@ started by hand (*Actions → Release → Run workflow*).
 
 ## What's in a release
 
-**croc is not bundled.** Users install it themselves; Kopico finds it on `PATH` and in the
+**croc is not bundled.** Users install it themselves; AirEcho finds it on `PATH` and in the
 usual install folders (`receiver::find_croc`). The release notes say so.
 
 ### macOS `.dmg` — `scripts/build-macos-dmg.sh`
 
-- `Kopico Desktop.app` with GTK, libadwaita and every library they need in
+- `AirEcho.app` with GTK, libadwaita and every library they need in
   `Contents/Frameworks` (copied and relinked by `dylibbundler`), plus GTK's data in
   `Contents/Resources`: GSettings schemas, the Adwaita icon theme (the UI's symbolic icons),
   and the gdk-pixbuf SVG loader.
@@ -39,7 +39,7 @@ usual install folders (`receiver::find_croc`). The release notes say so.
 - **`src/macos_bundle.rs`** runs first thing in `main`. When `Contents/Resources/share`
   exists, it points GTK at the bundle (`XDG_DATA_DIRS`, `GSETTINGS_SCHEMA_DIR`,
   `GTK_DATA_PREFIX`, …). It also writes gdk-pixbuf's `loaders.cache` with the app's real
-  path to `~/Library/Caches/in.tl2a.kopico-desktop/`, because that file needs absolute
+  path to `~/Library/Caches/in.tl2a.airEcho/`, because that file needs absolute
   paths. Dev builds (`cargo run`) have no bundled data and are unaffected.
 - **Ad-hoc signed, not notarized** (that needs a paid Apple Developer account). Downloaded
   copies are quarantined: users confirm the first launch in *System Settings → Privacy &
@@ -70,13 +70,13 @@ usual install folders (`receiver::find_croc`). The release notes say so.
 - The GTK plugin's runtime hook forces `GDK_BACKEND=x11` and `GTK_THEME=Adwaita:light`
   (workarounds for GTK 3). Both are removed: the first loses Wayland, the second breaks
   libadwaita's dark mode and accent colours.
-- The *Send with Kopico* file-manager entries aren't installed by an AppImage.
+- The *Send with AirEcho* file-manager entries aren't installed by an AppImage.
 
 ## Building locally
 
 ```sh
 # macOS (Homebrew or MacPorts GTK stack + dylibbundler, see the script header)
-scripts/build-macos-dmg.sh                    # → dist/Kopico_Desktop-<version>-<arch>.dmg
+scripts/build-macos-dmg.sh                    # → dist/AirEcho_Desktop-<version>-<arch>.dmg
 
 # Linux AppImage, in Docker (any host OS; the image's architecture is the AppImage's)
 docker run --rm -v "$PWD":/src -w /src -e CARGO_TARGET_DIR=/src/target/linux \
