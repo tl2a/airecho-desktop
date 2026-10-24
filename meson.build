@@ -1,7 +1,7 @@
 project(
-  'kopico-desktop',
+  'airecho',
   'rust',
-  version: '0.2.1',
+  version: '0.3.0',
   license: 'GPL-3.0-or-later',
   meson_version: '>= 1.0',
 )
@@ -21,7 +21,7 @@ prefix  = get_option('prefix')
 bindir  = prefix / get_option('bindir')
 datadir = prefix / get_option('datadir')
 
-app_id   = 'in.tl2a.kopico-desktop'
+app_id   = 'in.tl2a.airEcho'
 data_dir = meson.project_source_root() / 'data'
 
 # ── Blueprint → GtkBuilder XML ────────────────────────────────────────────────
@@ -52,17 +52,22 @@ gresource_xml = data_dir / app_id + '.gresource.xml'
 
 compiled_gresource = custom_target(
   'gresource',
-  input:   [gresource_xml, data_dir / 'style.css'] + blp_to_ui,
+  input:   [
+    gresource_xml,
+    data_dir / 'style.css',
+    data_dir / 'icons/in.tl2a.airEcho-status-icon-active.svg',
+    data_dir / 'icons/in.tl2a.airEcho-status-icon-inactive.svg',
+  ] + blp_to_ui,
   output:  app_id + '.gresource',
   command: [
     glib_compile_resources,
-    '--sourcedir', meson.current_build_dir() / 'data',
+    '--sourcedir', meson.current_build_dir(),
     '--sourcedir', data_dir,   # hand-written resources (style.css)
     '--target', '@OUTPUT@',
     gresource_xml,
   ],
   install:        true,
-  install_dir:    datadir / 'kopico-desktop',
+  install_dir:    datadir / 'airecho',
 )
 
 # ── Cargo build ───────────────────────────────────────────────────────────────
@@ -80,7 +85,8 @@ cargo_env.set('MESON_BUILD_ROOT', meson.current_build_dir())
 
 custom_target(
   'cargo-build',
-  output:  'kopico-desktop-bin',      # placeholder; real binary is in target/
+  output:  'airecho-bin',      # placeholder; real binary is in target/
+  build_by_default: true,
   console: true,
   command: [
     cargo, 'build',
@@ -91,14 +97,18 @@ custom_target(
 
 # ── Install binary ────────────────────────────────────────────────────────────
 install_data(
-  meson.project_source_root() / 'target' / rust_target / 'kopico-desktop',
+  meson.project_source_root() / 'target' / rust_target / 'airecho',
   install_dir: bindir,
-  rename:      'kopico-desktop',
+  rename:      'airecho',
 )
 
 # ── Install .desktop file (required for gio::Notification on Linux) ───────────
 install_data(
-  'data/in.tl2a.kopico-desktop.desktop',
+  'data/in.tl2a.airEcho.desktop',
   install_dir: datadir / 'applications',
 )
 
+install_data(
+  'data/icons/in.tl2a.airEcho.svg',
+  install_dir: datadir / 'icons' / 'hicolor' / 'scalable' / 'apps',
+)

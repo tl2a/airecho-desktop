@@ -1,4 +1,4 @@
-# Kopico Desktop — Agent Instructions
+# AirEcho — Agent Instructions
 
 > This file provides structured instructions for AI coding agents (OpenAI Codex,
 > GitHub Copilot Workspace, etc.). For a deeper reference, see `CLAUDE.md`.
@@ -56,9 +56,9 @@ Do **not** mix `gtk4::Widget` and `adw::gtk::Widget` for the same type.
 
 ### New Window or Dialog
 - [ ] Create `data/ui/my_window.blp`
-- [ ] Register it in `data/in.tl2a.kopico-desktop.gresource.xml`
+- [ ] Register it in `data/in.tl2a.airEcho.gresource.xml`
 - [ ] Add the `.blp` path to `blueprints = files(…)` in `meson.build`
-- [ ] Load with `gtk4::Builder::from_resource("/in/tl2a/kopico-desktop/ui/my_window.ui")`
+- [ ] Load with `gtk4::Builder::from_resource("/in/tl2a/airEcho/ui/my_window.ui")`
 
 ### New Dependency
 - [ ] Add to `[dependencies]` in `Cargo.toml`
@@ -89,17 +89,17 @@ Do **not** mix `gtk4::Widget` and `adw::gtk::Widget` for the same type.
 | `src/sender.rs` | croc send (text, files) | ✅ Yes — see `docs/sending.md` |
 | `src/croc_names.rs` | File names croc's receiver accepts; stages unsafe ones | ✅ Yes |
 | `src/clipboard.rs` | Clipboard write + watch | ✅ Yes |
-| `src/macos_services.rs` | macOS Finder *Send with Kopico* | ✅ Rarely |
+| `src/macos_services.rs` | macOS Finder *Send with AirEcho* | ✅ Rarely |
 | `src/macos_bundle.rs` | Release `.app`: GTK env pointing at bundled data | ✅ Rarely — see `docs/releasing.md` |
 | `scripts/build-macos-dmg.sh`, `scripts/build-appimage.sh` | Release packaging | ✅ Yes — test locally first (`docs/releasing.md`) |
 | `.github/workflows/release.yml` | Builds dmg/AppImage on push to `main`, releases new versions | ✅ Yes |
-| `data/linux/` | Linux file-manager *Send with Kopico* actions | ✅ Yes |
+| `data/linux/` | Linux file-manager *Send with AirEcho* actions | ✅ Yes |
 | `src/receiver.rs` | croc receive loop (background thread, polling) | ✅ Yes — see CLAUDE.md “Receiving Files” first |
 | `src/tray.rs` | System tray icon + menu → `app.*` actions | ✅ Yes |
 | `src/notification.rs` | System notifications — gio on Linux, notify-rust on macOS | ✅ Yes |
 | `dev-install.sh` | Registers the dev build for notifications (Linux `.desktop`, macOS `.app`) | ✅ Yes |
 | `data/macos/Info.plist` | macOS bundle metadata (bundle id must equal `APP_ID`) | ✅ Yes |
-| `scripts/macos-app.sh` | Builds, signs and registers `Kopico Desktop.app`; `cargo run` runner on macOS | ✅ Rarely |
+| `scripts/macos-app.sh` | Builds, signs and registers `AirEcho.app`; `cargo run` runner on macOS | ✅ Rarely |
 | `.cargo/config.toml` | Sets that runner for macOS | ✅ Rarely |
 | `data/style.css` | App CSS, auto-loaded by `AdwApplication` | ✅ Yes |
 | `data/ui/window.blp` | Window UI layout | ✅ Yes |

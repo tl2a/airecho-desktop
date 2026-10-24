@@ -8,20 +8,20 @@
 //! Watching — see [`watch`]:
 //! - macOS has no change notification; the pasteboard's `changeCount` is checked every
 //!   500 ms (what macOS clipboard managers do).
-//! - Linux: GDK's `changed` signal. On Wayland compositors without data-control (GNOME)
-//!   it only fires while Kopico has focus.
+//! - Linux: GDK's `changed` signal. On GNOME Wayland, AirEcho prefers XWayland to avoid
+//!   Mutter's focused-client-only clipboard change notifications when XWayland is present.
 //! - Content marked private by password managers is ignored.
 
 use gtk4::glib;
 
-/// What the watcher reports: plain text the user just copied (not from Kopico).
+/// What the watcher reports: plain text the user just copied (not from AirEcho).
 pub type OnCopy = Box<dyn Fn(String)>;
 
 // ── Writing ────────────────────────────────────────────────────────────────────
 
 /// Put `text` on the system clipboard (paste anywhere with Cmd/Ctrl+V).
 ///
-/// macOS: written to NSPasteboard directly (stays after Kopico quits) — GTK's macOS
+/// macOS: written to NSPasteboard directly (stays after AirEcho quits) — GTK's macOS
 /// clipboard backend rejects its own MIME types and copies nothing.
 #[cfg(target_os = "macos")]
 pub fn copy_to_clipboard(text: &str) {
@@ -97,7 +97,7 @@ const PRIVATE_TYPES: [&str; 3] = [
 ];
 
 /// Call `on_copy` (on the GTK main thread) whenever the user copies text. Copies that
-/// happened before this call, and Kopico's own writes, are not reported.
+/// happened before this call, and AirEcho's own writes, are not reported.
 #[cfg(target_os = "macos")]
 pub fn watch(on_copy: OnCopy) {
     use std::cell::Cell;
@@ -129,11 +129,11 @@ pub fn watch(on_copy: OnCopy) {
     });
 }
 
-/// Call `on_copy` (on the GTK main thread) whenever the user copies text. Kopico's own
-/// GDK writes are skipped (`is_local`); `wl-copy` writes come back like any other copy
-/// and are filtered by the caller (same text as just received).
+/// Call `on_copy` (on the GTK main thread) whenever the clipboard text changes. The
+/// contents present when the watcher starts are treated as the baseline, not a copy.
 #[cfg(not(target_os = "macos"))]
 pub fn watch(on_copy: OnCopy) {
+    use std::cell::RefCell;
     use std::rc::Rc;
 
     use gtk4::prelude::*;
@@ -142,17 +142,68 @@ pub fn watch(on_copy: OnCopy) {
         eprintln!("[clipboard] no display — copied text can't be watched");
         return;
     };
-    let on_copy = Rc::new(on_copy);
-    display.clipboard().connect_changed(move |clipboard| {
-        // KDE password managers mark private entries with this hint
-        if clipboard.is_local() || clipboard.formats().contain_mime_type("x-kde-passwordManagerHint") {
-            return;
-        }
-        let (clipboard, on_copy) = (clipboard.clone(), on_copy.clone());
-        glib::spawn_future_local(async move {
-            if let Ok(Some(text)) = clipboard.read_text_future().await {
-                on_copy(text.to_string());
+    let clipboard = display.clipboard();
+    glib::spawn_future_local(async move {
+        let initial = match clipboard.read_text_future().await {
+            Ok(text) => text.map(|text| text.to_string()),
+            Err(err) => {
+                eprintln!("[clipboard] couldn't read initial clipboard contents ({err})");
+                None
             }
+        };
+        let previous = Rc::new(RefCell::new(initial));
+        let on_copy: Rc<dyn Fn(String)> = Rc::from(on_copy);
+        clipboard.connect_changed(move |clipboard| {
+            // KDE password managers mark private entries with this hint
+            if clipboard.is_local()
+                || clipboard
+                    .formats()
+                    .contain_mime_type("x-kde-passwordManagerHint")
+            {
+                return;
+            }
+
+            let clipboard = clipboard.clone();
+            let previous = previous.clone();
+            let on_copy = on_copy.clone();
+            glib::spawn_future_local(async move {
+                match clipboard.read_text_future().await {
+                    Ok(text) => {
+                        let text = text.map(|text| text.to_string());
+                        if let Some(text) = changed_text(&mut previous.borrow_mut(), text) {
+                            on_copy(text);
+                        }
+                    }
+                    Err(err) => eprintln!("[clipboard] couldn't read copied text ({err})"),
+                }
+            });
         });
     });
+}
+
+#[cfg(not(target_os = "macos"))]
+fn changed_text(previous: &mut Option<String>, current: Option<String>) -> Option<String> {
+    if *previous == current {
+        return None;
+    }
+    *previous = current.clone();
+    current
+}
+
+#[cfg(test)]
+mod tests {
+    use super::changed_text;
+
+    #[test]
+    fn startup_clipboard_is_not_reported_as_a_copy() {
+        let mut previous = Some("already on clipboard".into());
+        assert_eq!(
+            changed_text(&mut previous, Some("already on clipboard".into())),
+            None
+        );
+        assert_eq!(
+            changed_text(&mut previous, Some("copied after startup".into())),
+            Some("copied after startup".into())
+        );
+    }
 }

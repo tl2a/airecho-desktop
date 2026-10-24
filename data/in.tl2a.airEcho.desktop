@@ -1,9 +1,9 @@
 [Desktop Entry]
-Name=Kopico Desktop
-Comment=Kopico clipboard manager
+Name=AirEcho
+Comment=AirEcho clipboard manager
 # %F: files from the file manager ("Open With") are sent, not opened
-Exec=kopico-desktop %F
-Icon=in.tl2a.kopico-desktop
+Exec=airecho %F
+Icon=in.tl2a.airEcho
 Type=Application
 Categories=Utility;
 StartupNotify=true

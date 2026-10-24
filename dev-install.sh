@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # dev-install.sh — registers the dev build with the desktop so that `cargo run` can show
-# system notifications under Kopico's own name.
+# system notifications under AirEcho's own name.
 #
 #   Linux: installs the .desktop file to ~/.local/share/applications/ (gio::Notification
-#          needs it) and the "Send with Kopico" right-click entries for Nautilus
+#          needs it) and the "Send with AirEcho" right-click entries for Nautilus
 #          (nautilus-python), Dolphin, Nemo, and Thunar.
-#   macOS: creates "~/Applications/Kopico Desktop.app" (signed bundle with the debug
+#   macOS: creates "~/Applications/AirEcho.app" (signed bundle with the debug
 #          binary) — UNUserNotificationCenter only works for a signed app bundle.
 #          `cargo run` refreshes it automatically (scripts/macos-app.sh).
 #
@@ -15,8 +15,8 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
-BINARY="$REPO_ROOT/target/debug/kopico-desktop"
-APP_ID="in.tl2a.kopico-desktop"
+BINARY="$REPO_ROOT/target/debug/airecho"
+APP_ID="in.tl2a.airEcho"
 
 install_linux() {
     local desktop_src="$REPO_ROOT/data/$APP_ID.desktop"
@@ -24,6 +24,13 @@ install_linux() {
     local dest="$dest_dir/$APP_ID.desktop"
 
     mkdir -p "$dest_dir"
+
+    # Remove the previous application identity and its right-click integrations.
+    rm -f "$dest_dir/in.tl2a.kopico-desktop.desktop"
+    rm -f "$HOME/.local/share/icons/hicolor/scalable/apps/in.tl2a.kopico-desktop.svg"
+    rm -f "$HOME/.local/share/nautilus-python/extensions/kopico-send.py"
+    rm -f "$HOME/.local/share/kio/servicemenus/kopico-send.desktop"
+    rm -f "$HOME/.local/share/nemo/actions/kopico-send.nemo_action"
 
     # Copy the template and patch Exec= to the actual debug binary path
     sed "s|^Exec=.*|Exec=$BINARY %F|" "$desktop_src" > "$dest"
@@ -36,12 +43,12 @@ install_linux() {
     cp "$REPO_ROOT/data/icons/$APP_ID.svg" "$icon_dir/$APP_ID.svg"
     echo "Installed: $icon_dir/$APP_ID.svg"
 
-    # Right-click → "Send with Kopico" in Nautilus (needs nautilus-python)
+    # Right-click → "Send with AirEcho" in Nautilus (needs nautilus-python)
     local nautilus_dir="$HOME/.local/share/nautilus-python/extensions"
     mkdir -p "$nautilus_dir"
-    sed "s|@KOPICO_BIN@|$BINARY|" "$REPO_ROOT/data/linux/nautilus/kopico-send.py" \
-        > "$nautilus_dir/kopico-send.py"
-    echo "Installed: $nautilus_dir/kopico-send.py"
+    sed "s|@AIRECHO_BIN@|$BINARY|" "$REPO_ROOT/data/linux/nautilus/airecho-send.py" \
+        > "$nautilus_dir/airecho-send.py"
+    echo "Installed: $nautilus_dir/airecho-send.py"
     if command -v rpm &>/dev/null; then
         if rpm -q nautilus-python &>/dev/null; then
             nautilus_python_installed=true
@@ -64,23 +71,23 @@ install_linux() {
     # Dolphin service menu
     local kio_dir="$HOME/.local/share/kio/servicemenus"
     mkdir -p "$kio_dir"
-    sed "s|@KOPICO_BIN@|$BINARY|" "$REPO_ROOT/data/linux/kio/kopico-send.desktop" \
-        > "$kio_dir/kopico-send.desktop"
-    chmod +x "$kio_dir/kopico-send.desktop" # KDE only loads executable service menus
-    echo "Installed: $kio_dir/kopico-send.desktop"
+    sed "s|@AIRECHO_BIN@|$BINARY|" "$REPO_ROOT/data/linux/kio/airecho-send.desktop" \
+        > "$kio_dir/airecho-send.desktop"
+    chmod +x "$kio_dir/airecho-send.desktop" # KDE only loads executable service menus
+    echo "Installed: $kio_dir/airecho-send.desktop"
 
     # Nemo action
     local nemo_dir="$HOME/.local/share/nemo/actions"
     mkdir -p "$nemo_dir"
-    sed "s|@KOPICO_BIN@|$BINARY|" "$REPO_ROOT/data/linux/nemo/kopico-send.nemo_action" \
-        > "$nemo_dir/kopico-send.nemo_action"
-    echo "Installed: $nemo_dir/kopico-send.nemo_action"
+    sed "s|@AIRECHO_BIN@|$BINARY|" "$REPO_ROOT/data/linux/nemo/airecho-send.nemo_action" \
+        > "$nemo_dir/airecho-send.nemo_action"
+    echo "Installed: $nemo_dir/airecho-send.nemo_action"
 
     # Thunar custom action. Merge into the user's existing UCA config rather than
     # replacing their other custom actions.
     local thunar_config="$HOME/.config/Thunar/uca.xml"
     mkdir -p "$(dirname "$thunar_config")"
-    KOPICO_BIN="$BINARY" python3 - "$thunar_config" <<'PY'
+    AIRECHO_BIN="$BINARY" python3 - "$thunar_config" <<'PY'
 import os
 import shlex
 import sys
@@ -100,10 +107,10 @@ else:
 action = ET.Element("action")
 for tag, text in (
     ("icon", "document-send"),
-    ("name", "Send with Kopico"),
-    ("unique-id", "kopico-desktop-send"),
-    ("command", f"{shlex.quote(os.environ['KOPICO_BIN'])} %F"),
-    ("description", "Send selected files with Kopico"),
+    ("name", "Send with AirEcho"),
+    ("unique-id", "airecho-send"),
+    ("command", f"{shlex.quote(os.environ['AIRECHO_BIN'])} %F"),
+    ("description", "Send selected files with AirEcho"),
 ):
     ET.SubElement(action, tag).text = text
 range_element = ET.SubElement(action, "range")
@@ -113,7 +120,7 @@ ET.SubElement(action, "patterns").text = "*"
 ET.SubElement(action, "startup-notify")
 
 for index, existing in enumerate(root.findall("action")):
-    if existing.findtext("unique-id") == "kopico-desktop-send":
+    if existing.findtext("unique-id") in {"airecho-send", "kopico-desktop-send"}:
         root.remove(existing)
         root.insert(index, action)
         break
@@ -144,8 +151,8 @@ install_macos() {
     # executable, registered with LaunchServices
     "$REPO_ROOT/scripts/macos-app.sh" install
     echo ""
-    echo "\`cargo run\` now starts Kopico from this bundle. On the first start macOS asks"
-    echo "to allow notifications; afterwards Kopico Desktop is listed in"
+    echo "\`cargo run\` now starts AirEcho from this bundle. On the first start macOS asks"
+    echo "to allow notifications; afterwards AirEcho is listed in"
     echo "System Settings → Notifications."
 }
 

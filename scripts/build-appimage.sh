@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# build-appimage.sh — build dist/Kopico_Desktop-<version>-<arch>.AppImage for this
+# build-appimage.sh — build dist/AirEcho_Desktop-<version>-<arch>.AppImage for this
 # machine's architecture (x86_64 or aarch64).
 #
 # Needs GTK >= 4.22 and libadwaita >= 1.9 (the crates' gnome_50 / v1_9 features), i.e. a
@@ -16,14 +16,14 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
-APP_ID="in.tl2a.kopico-desktop"
+APP_ID="in.tl2a.airEcho"
 ARCH="$(uname -m)"
 VERSION="${VERSION:-$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)}"
 OUT_DIR="${OUT_DIR:-$REPO_ROOT/dist}"
 TARGET_DIR="${CARGO_TARGET_DIR:-$REPO_ROOT/target}"
 WORK_DIR="$TARGET_DIR/appimage"
 APPDIR="$WORK_DIR/AppDir"
-OUTPUT_NAME="Kopico_Desktop-$VERSION-$ARCH.AppImage"
+OUTPUT_NAME="AirEcho_Desktop-$VERSION-$ARCH.AppImage"
 
 if [ "${1:-}" = "--install-deps" ]; then
     export DEBIAN_FRONTEND=noninteractive
@@ -40,12 +40,12 @@ fi
 # shellcheck disable=SC1091
 [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 
-echo "==> Building kopico-desktop $VERSION ($ARCH)"
+echo "==> Building airecho $VERSION ($ARCH)"
 cargo build --release --locked
 
 echo "==> Assembling AppDir"
 rm -rf "$APPDIR"
-install -Dm755 "$TARGET_DIR/release/kopico-desktop" "$APPDIR/usr/bin/kopico-desktop"
+install -Dm755 "$TARGET_DIR/release/airecho" "$APPDIR/usr/bin/airecho"
 install -Dm644 "data/$APP_ID.desktop" "$APPDIR/usr/share/applications/$APP_ID.desktop"
 install -Dm644 "data/icons/$APP_ID.svg" "$APPDIR/usr/share/icons/hicolor/scalable/apps/$APP_ID.svg"
 # The UI's symbolic icons come from the Adwaita theme, which not every desktop has (KDE)

@@ -73,13 +73,13 @@ binary); Meson installs it for real installs.
 `UNUserNotificationCenter` — not the deprecated `NSUserNotificationCenter`.
 
 We first used notify-rust's default (deprecated) API. It never asks for permission, so
-Kopico never appeared in System Settings → Notifications, and macOS 26 had no reason to show
+AirEcho never appeared in System Settings → Notifications, and macOS 26 had no reason to show
 its notifications. The current API fixes both, but has requirements (all verified on
 macOS 26.7):
 
 | Requirement | What happens otherwise | How we meet it |
 |---|---|---|
-| Run from inside an **`.app` bundle** with a bundle id | `NoBundleIdentifier` | `cargo run` starts Kopico from `~/Applications/Kopico Desktop.app` |
+| Run from inside an **`.app` bundle** with a bundle id | `NoBundleIdentifier` | `cargo run` starts AirEcho from `~/Applications/AirEcho.app` |
 | The bundle is **signed** | permission is refused without a prompt | ad-hoc signature (`codesign --sign -`), no Apple account needed |
 | Bundle id known to LaunchServices | no proper attribution | `lsregister -f` |
 | Permission requested | not listed in Settings | `notification::init()` calls `request_auth` at startup |
@@ -101,13 +101,13 @@ for distribution.
 **Constraint (macOS).** GTK 4.22's macOS clipboard passes MIME types where AppKit expects
 UTIs (`'text/plain;charset=utf-8' is not a valid UTI string`) and copies nothing.
 **Decision:** write to `NSPasteboard` directly via `objc2-app-kit` (already in the build
-through tray-icon). The text stays on the clipboard after Kopico quits.
+through tray-icon). The text stays on the clipboard after AirEcho quits.
 
 **Constraint (Linux/Wayland).** Compositors may ignore clipboard writes from an app without
-keyboard focus — exactly Kopico's situation while it sits in the tray. **Decision:** on
+keyboard focus — exactly AirEcho's situation while it sits in the tray. **Decision:** on
 Wayland use `wl-copy` (from `wl-clipboard`), whose data-control protocol can set the
 clipboard without focus where supported; fall back to GTK's clipboard otherwise. On X11
-GTK's clipboard is used; Kopico owns the content while it runs.
+GTK's clipboard is used; AirEcho owns the content while it runs.
 
 Received text replaces the current clipboard without asking.
 
@@ -129,11 +129,11 @@ Details in [receiver.md](receiver.md). The decisions in short:
 
 Details in [sending.md](sending.md).
 
-**Constraint.** Kopico sends and receives with the same croc code; a running receive loop
-would pick up Kopico's own `croc send`. **Decision:** stop receiving before each send (but
+**Constraint.** AirEcho sends and receives with the same croc code; a running receive loop
+would pick up AirEcho's own `croc send`. **Decision:** stop receiving before each send (but
 wait for an incoming transfer to finish first), one send at a time, resume afterwards.
 
-**Constraint.** Two Kopicos with one code turn a copy into an endless ping-pong (receive →
+**Constraint.** Two AirEcho instances with one code turn a copy into an endless ping-pong (receive →
 clipboard → "copy" → send back). **Decision:** never send text equal to the last text
 received or sent.
 
@@ -157,28 +157,28 @@ skip copies marked private by password managers, and make *Send Copied Text* a s
 |---|---|---|
 | macOS | No clipboard-change event exists | Check `NSPasteboard.changeCount` every 500 ms (cheap; what clipboard managers do) |
 | Linux X11 | — | GDK `changed` signal |
-| Linux Wayland | Clients only learn about clipboard changes while focused, unless the compositor offers data-control (GNOME doesn't) | GDK `changed`; on GNOME copies are noticed only while Kopico's window is focused. A data-control watcher (`wl-paste --watch`, wlroots/KDE) would be a possible addition |
+| Linux Wayland | GNOME Mutter does not offer data-control for background clipboard watching | On GNOME Wayland, prefer GDK's X11 backend through XWayland (`GDK_BACKEND=x11,wayland`) unless the user set `GDK_BACKEND`; other sessions keep GTK's normal backend selection. If XWayland is unavailable, GDK falls back to Wayland, where GNOME only reports copies while AirEcho is focused |
 
 ### Sending files from the file manager
 
 **macOS.** The Finder *Share* menu only lists *Share Extensions*: a separate sandboxed
 `.appex` built with Xcode, signed and embedded in the app. **Decision:** a **Service**
 instead — `NSServices` in Info.plist plus a provider object (`src/macos_services.rs`) — which
-puts *Send with Kopico* in Finder's right-click *Quick Actions / Services* menu, and
-`CFBundleDocumentTypes` (`public.item`, rank *Alternate*) for *Open With → Kopico Desktop*.
+puts *Send with AirEcho* in Finder's right-click *Quick Actions / Services* menu, and
+`CFBundleDocumentTypes` (`public.item`, rank *Alternate*) for *Open With → AirEcho*.
 GTK's macOS backend delivers LaunchServices "open" requests to `GApplication::open` in the
 **running** process, so both end in the same code. Verified on macOS 26 with
 `open -a` and `NSPerformService`.
 
 **macOS: no single-instance via GApplication.** GApplication finds a running instance over
-D-Bus, which macOS doesn't have; `kopico-desktop <files>` on macOS starts a second Kopico.
+D-Bus, which macOS doesn't have; `airecho <files>` on macOS starts a second AirEcho.
 Files must therefore come through LaunchServices (Finder), which targets the running app.
 
 **Linux.** No standard "send" menu across file managers. **Decision:** the `.desktop` file
-takes files (`Exec=kopico-desktop %F`) for *Open With*, plus *Send with Kopico* entries for
+takes files (`Exec=airecho %F`) for *Open With*, plus *Send with AirEcho* entries for
 Nautilus (a `nautilus-python` extension), Dolphin (a KDE service menu), Nemo (an action),
 and Thunar (a custom action), installed by `dev-install.sh`. They run
-`kopico-desktop <files>`; GApplication (`HANDLES_OPEN`) forwards them to the running
+`airecho <files>`; GApplication (`HANDLES_OPEN`) forwards them to the running
 instance over D-Bus.
 
 ## macOS: GTK libraries

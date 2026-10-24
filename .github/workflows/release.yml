@@ -1,4 +1,4 @@
-# Builds Kopico Desktop for macOS (.dmg) and Linux (.AppImage), each for arm64 and x86_64,
+# Builds AirEcho for macOS (.dmg) and Linux (.AppImage), each for arm64 and x86_64,
 # and publishes them as a GitHub release — see docs/releasing.md.
 #
 # Every push to main (= every merged pull request) builds all four. A release is created
@@ -177,6 +177,6 @@ jobs:
           (cd dist && sha256sum -- * > SHA256SUMS)
           gh release create "v$VERSION" dist/* \
             --target "$GITHUB_SHA" \
-            --title "Kopico Desktop $VERSION" \
+            --title "AirEcho $VERSION" \
             --notes-file .github/release-notes.md \
             --generate-notes

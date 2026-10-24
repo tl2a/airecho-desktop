@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # make-icons.sh — regenerate data/macos/AppIcon.icns from the SVG app icon.
 #
-# Run on macOS after changing data/icons/in.tl2a.kopico-desktop.svg (needs rsvg-convert
+# Run on macOS after changing data/icons/in.tl2a.airEcho.svg (needs rsvg-convert
 # from librsvg: `port install librsvg` / `brew install librsvg`). The .icns is committed,
 # so release builds don't need these tools.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SVG="$REPO_ROOT/data/icons/in.tl2a.kopico-desktop.svg"
+SVG="$REPO_ROOT/data/icons/in.tl2a.airEcho.svg"
 ICONSET="$(mktemp -d)/AppIcon.iconset"
 mkdir -p "$ICONSET"
 

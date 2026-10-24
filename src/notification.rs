@@ -5,8 +5,8 @@
 //!   (`dev-install.sh` installs one for development).
 //! - **macOS:** `notify-rust` with Apple's `UNUserNotificationCenter` (feature
 //!   `preview-macos-un`) — GLib has no macOS notification backend. Requires running from
-//!   an `.app` bundle with Kopico's bundle id; [`init`] asks for permission, which also
-//!   lists Kopico in System Settings → Notifications. Clicking one does nothing yet.
+//!   an `.app` bundle with AirEcho's bundle id; [`init`] asks for permission, which also
+//!   lists AirEcho in System Settings → Notifications. Clicking one does nothing yet.
 //!
 //! Texts are never put in a notification — they can appear on the lock screen.
 
@@ -23,9 +23,9 @@ const ENABLED_ID: &str = "enabled";
 const FILE_ID: &str = "file-received";
 const SEND_ID: &str = "send";
 
-/// Tell the user Kopico was turned on (from the window or the tray).
+/// Tell the user AirEcho was turned on (from the window or the tray).
 pub fn send_enabled(app: &Application) {
-    send(app, ENABLED_ID, "Kopico Enabled", "Kopico is running in the background.");
+    send(app, ENABLED_ID, "AirEcho Enabled", "AirEcho is running in the background.");
 }
 
 /// Tell the user a text message arrived and is on the clipboard.
@@ -41,10 +41,10 @@ pub fn send_sending(app: &Application, message: &str) {
 /// How sending files ended (delivered, nobody picked it up, failed).
 pub fn send_sent(app: &Application, message: &str) {
     // Same id as send_sending → replaces the "waiting" notification
-    send(app, SEND_ID, "Kopico", message);
+    send(app, SEND_ID, "AirEcho", message);
 }
 
-/// Tell the user files arrived via croc. `message` is e.g. "“a.jpg” saved to ~/Downloads/Kopico".
+/// Tell the user files arrived via croc. `message` is e.g. "“a.jpg” saved to ~/Downloads/AirEcho".
 pub fn send_files_received(app: &Application, message: &str) {
     // Same id for every transfer → a new one replaces the last instead of stacking
     send(app, FILE_ID, "Files Received", message);
@@ -76,7 +76,7 @@ fn send(_app: &Application, _id: &str, title: &str, body: &str) {
 
 /// macOS: ask for notification permission. Call once at startup (main thread, after GTK
 /// is initialised). The first time, macOS shows its "Allow notifications?" prompt and
-/// Kopico appears in System Settings → Notifications.
+/// AirEcho appears in System Settings → Notifications.
 #[cfg(target_os = "macos")]
 pub fn init() {
     if !macos::available() {
@@ -87,7 +87,7 @@ pub fn init() {
         match notify_rust::request_auth().await {
             Ok(true) => println!("[notification] notifications allowed"),
             Ok(false) => eprintln!(
-                "[notification] notifications are off for Kopico Desktop — enable them in \
+                "[notification] notifications are off for AirEcho — enable them in \
                  System Settings → Notifications"
             ),
             Err(err) => eprintln!("[notification] permission request failed: {err}"),
@@ -113,8 +113,8 @@ mod macos {
             Err(_) => {
                 eprintln!(
                     "[notification] not running from an app bundle — macOS notifications \
-                     are disabled. Start Kopico via `cargo run` (uses scripts/macos-run.sh) \
-                     or from \"Kopico Desktop.app\"."
+                     are disabled. Start AirEcho via `cargo run` (uses scripts/macos-run.sh) \
+                     or from \"AirEcho.app\"."
                 );
                 false
             }

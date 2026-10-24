@@ -2,7 +2,7 @@ using Gtk 4.0;
 using Adw 1;
 
 Adw.ApplicationWindow window {
-  title: _("Kopico Desktop");
+  title: _("AirEcho");
   default-width: 640;
   default-height: 560;
   width-request: 360;
@@ -55,7 +55,7 @@ Adw.ApplicationWindow window {
                 Gtk.ToggleButton power_toggle {
                   action-name: "app.enabled";
                   halign: center;
-                  tooltip-text: _("Turn Kopico On or Off");
+                  tooltip-text: _("Turn AirEcho On or Off");
 
                   styles [
                     "circular",
@@ -69,16 +69,17 @@ Adw.ApplicationWindow window {
                   }
 
                   accessibility {
-                    label: _("Kopico");
+                    label: _("AirEcho");
                   }
                 }
 
                 Gtk.Box {
                   orientation: vertical;
                   spacing: 6;
+                  height-request: 112;
 
                   Gtk.Label state_title {
-                    label: _("Kopico Is On");
+                    label: _("AirEcho Is On");
                     wrap: true;
                     justify: center;
 
@@ -88,7 +89,7 @@ Adw.ApplicationWindow window {
                   }
 
                   Gtk.Label state_description {
-                    label: _("Kopico is running. Turn it off at any time from here or from the system tray.");
+                    label: _("AirEcho is running. Turn it off at any time from here or from the system tray.");
                     wrap: true;
                     justify: center;
 
@@ -113,7 +114,7 @@ Adw.ApplicationWindow window {
 
             Adw.PreferencesGroup {
               title: _("Receive");
-              description: _("Kopico polls croc in the background and receives files automatically.");
+              description: _("AirEcho polls croc in the background and receives files automatically.");
 
               // Subtitle is set from Rust to describe the selected mode
               Adw.ComboRow relay_mode_row {
@@ -133,7 +134,7 @@ Adw.ApplicationWindow window {
               // the sender automatically; set it when discovery doesn't find it.
               Adw.EntryRow sender_ip_row {
                 title: _("Sender IP Address (Optional)");
-                tooltip-text: _("The sender’s IP address, e.g. 192.168.1.20 — use this if automatic discovery doesn’t find it");
+                tooltip-text: _("Enter the sender IP address (e.g. 192.168.1.20) if automatic discovery doesn't find it.");
                 show-apply-button: true;
               }
 
@@ -176,7 +177,7 @@ Adw.ApplicationWindow window {
 
               Adw.ActionRow {
                 title: _("Send Files…");
-                subtitle: _("Or select files in Finder or Files and choose “Send with Kopico”");
+                subtitle: _("Or select files in Finder or Files and choose “Send with AirEcho”");
                 activatable: true;
                 action-name: "app.send-files";
 
@@ -193,7 +194,7 @@ Adw.ApplicationWindow window {
 
               Adw.SwitchRow tray_row {
                 title: _("Show in System Tray");
-                subtitle: _("Keep Kopico running in the background when the window is closed");
+                subtitle: _("Keep AirEcho running in the background when the window is closed");
                 active: true;
               }
             }

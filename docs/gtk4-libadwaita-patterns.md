@@ -108,7 +108,7 @@ orientation: vertical;        // Gtk.Orientation.VERTICAL
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
-  <gresource prefix="/in/tl2a/kopico-desktop">
+  <gresource prefix="/in/tl2a/airEcho">
     <file preprocess="xml-stripblanks">ui/window.ui</file>
     <file preprocess="xml-stripblanks">ui/preferences.ui</file>
     <!-- other file types (CSS, icons) don't need preprocess -->
@@ -139,7 +139,7 @@ This must happen **before** `Application::new()` / `app.run()`.
 ### Resource Paths
 The resource path is: `prefix` + `/` + `file-path-in-manifest`
 
-For this project: `/in/tl2a/kopico-desktop/ui/window.ui`
+For this project: `/in/tl2a/airEcho/ui/window.ui`
 
 ---
 
@@ -147,7 +147,7 @@ For this project: `/in/tl2a/kopico-desktop/ui/window.ui`
 
 ### Basic Pattern
 ```rust
-let builder = gtk4::Builder::from_resource("/in/tl2a/kopico-desktop/ui/window.ui");
+let builder = gtk4::Builder::from_resource("/in/tl2a/airEcho/ui/window.ui");
 
 // Type annotation is required — Rust cannot infer it
 let window: adw::ApplicationWindow = builder.object("window").expect("window");
@@ -287,8 +287,8 @@ toast_overlay.add_toast(toast);
 ### About Dialog
 ```rust
 let dialog = adw::AboutDialog::builder()
-    .application_name("Kopico")
-    .application_icon("in.tl2a.kopico-desktop")
+    .application_name("AirEcho")
+    .application_icon("in.tl2a.airEcho")
     .version(env!("CARGO_PKG_VERSION"))
     .developer_name("Your Name")
     .license_type(gtk4::License::Gpl30)
@@ -405,12 +405,12 @@ window.add_breakpoint(bp);
 
 ### Loading a Custom CSS File
 **This project:** nothing to do — `AdwApplication` auto-loads `style.css` from the app's
-resource base path (`/in/tl2a/kopico-desktop/style.css`, source `data/style.css`).
+resource base path (`/in/tl2a/airEcho/style.css`, source `data/style.css`).
 Manual loading is only needed for extra stylesheets:
 ```rust
 // In main(), after registering resources:
 let provider = gtk4::CssProvider::new();
-provider.load_from_resource("/in/tl2a/kopico-desktop/style.css");
+provider.load_from_resource("/in/tl2a/airEcho/style.css");
 gtk4::style_context_add_provider_for_display(
     &gdk::Display::default().unwrap(),
     &provider,
@@ -523,7 +523,7 @@ Shows syntax errors with line numbers before doing a full build.
 
 ### GResource Contents
 ```bash
-gresource list target/debug/build/kopico-desktop-*/out/in.tl2a.kopico-desktop.gresource
+gresource list target/debug/build/airecho-*/out/in.tl2a.airEcho.gresource
 ```
 
 ### Runtime Warnings

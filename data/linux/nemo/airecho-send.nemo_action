@@ -1,0 +1,8 @@
+[Nemo Action]
+Active=true
+Name=Send with AirEcho
+Comment=Send the selected files with AirEcho
+Exec=@AIRECHO_BIN@ %F
+Icon-Name=document-send
+Selection=any
+Extensions=any;

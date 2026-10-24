@@ -28,7 +28,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-/// Staging folders older than this are leftovers (Kopico quit mid-send) and are removed.
+/// Staging folders older than this are leftovers (AirEcho quit mid-send) and are removed.
 const STALE_AFTER: Duration = Duration::from_secs(24 * 60 * 60);
 const STAGING_PREFIX: &str = "files-";
 
@@ -52,7 +52,7 @@ impl Drop for Prepared {
     }
 }
 
-/// Make `files` sendable (see the module docs). `work_dir` is Kopico's private folder.
+/// Make `files` sendable (see the module docs). `work_dir` is AirEcho's private folder.
 pub fn prepare(files: &[PathBuf], work_dir: &Path) -> io::Result<Prepared> {
     remove_stale_staging(work_dir);
 
@@ -231,8 +231,8 @@ fn create_staging(work_dir: &Path) -> io::Result<PathBuf> {
     Ok(dir)
 }
 
-/// Delete staging folders left behind when Kopico quit during a send. Only old ones: a
-/// second Kopico process may be sending right now.
+/// Delete staging folders left behind when AirEcho quit during a send. Only old ones: a
+/// second AirEcho process may be sending right now.
 fn remove_stale_staging(work_dir: &Path) {
     let Ok(entries) = fs::read_dir(work_dir) else { return };
     for entry in entries.flatten() {
@@ -341,7 +341,7 @@ mod tests {
 
     #[test]
     fn stages_only_what_needs_it() {
-        let base = std::env::temp_dir().join(format!("kopico-names-{}", std::process::id()));
+        let base = std::env::temp_dir().join(format!("airecho-names-{}", std::process::id()));
         let _ = fs::remove_dir_all(&base);
         let (src, work) = (base.join("src"), base.join("work"));
         fs::create_dir_all(src.join("shots/.git")).unwrap();

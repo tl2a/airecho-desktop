@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# build-macos-dmg.sh — build dist/Kopico_Desktop-<version>-<arch>.dmg (arch = arm64 or
-# x86_64, this Mac's) containing a self-contained "Kopico Desktop.app".
+# build-macos-dmg.sh — build dist/AirEcho_Desktop-<version>-<arch>.dmg (arch = arm64 or
+# x86_64, this Mac's) containing a self-contained "AirEcho.app".
 #
 # Needs GTK >= 4.22 and libadwaita >= 1.9 built for Quartz, plus blueprint-compiler,
 # adwaita-icon-theme, librsvg and dylibbundler, from Homebrew (Apple Silicon) or
@@ -15,14 +15,14 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
-APP_ID="in.tl2a.kopico-desktop"
+APP_ID="in.tl2a.airEcho"
 ARCH="$(uname -m)"
 VERSION="${VERSION:-$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)}"
 OUT_DIR="${OUT_DIR:-$REPO_ROOT/dist}"
 TARGET_DIR="${CARGO_TARGET_DIR:-$REPO_ROOT/target}"
 WORK_DIR="$TARGET_DIR/macos-dist"
-APP="$WORK_DIR/Kopico Desktop.app"
-DMG_NAME="Kopico_Desktop-$VERSION-$ARCH.dmg"
+APP="$WORK_DIR/AirEcho.app"
+DMG_NAME="AirEcho_Desktop-$VERSION-$ARCH.dmg"
 DYLIBBUNDLER="${DYLIBBUNDLER:-dylibbundler}"
 
 # The package manager's root (/opt/homebrew, /opt/local): where data from all packages is
@@ -32,7 +32,7 @@ PREFIX="$(pkg-config --variable=prefix gtk4)"
 PIXBUF_QUERY="$ROOT/bin/gdk-pixbuf-query-loaders"
 echo "==> GTK $(pkg-config --modversion gtk4), libadwaita $(pkg-config --modversion libadwaita-1) from $ROOT"
 
-echo "==> Building kopico-desktop $VERSION ($ARCH)"
+echo "==> Building airecho $VERSION ($ARCH)"
 # Header padding: the executable's library paths are rewritten below
 RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=-Wl,-headerpad_max_install_names" \
     cargo build --release --locked
@@ -40,7 +40,7 @@ RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=-Wl,-headerpad_max_install_names" \
 echo "==> Assembling $APP"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Frameworks" "$APP/Contents/Resources/share"
-cp "$TARGET_DIR/release/kopico-desktop" "$APP/Contents/MacOS/kopico-desktop"
+cp "$TARGET_DIR/release/airecho" "$APP/Contents/MacOS/airecho"
 cp data/macos/Info.plist "$APP/Contents/Info.plist"
 cp data/macos/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 PLIST="$APP/Contents/Info.plist"
@@ -64,7 +64,7 @@ else
 fi
 
 echo "==> Bundling libraries (dylibbundler)"
-fix_args=(-x "$APP/Contents/MacOS/kopico-desktop")
+fix_args=(-x "$APP/Contents/MacOS/airecho")
 for loader in "$APP"/Contents/Frameworks/libpixbufloader*; do
     [ -e "$loader" ] && fix_args+=(-x "$loader")
 done
@@ -88,7 +88,7 @@ set_rpath() { # <file> <rpath>
     done
     install_name_tool -add_rpath "$2" "$1"
 }
-set_rpath "$APP/Contents/MacOS/kopico-desktop" @executable_path/../Frameworks
+set_rpath "$APP/Contents/MacOS/airecho" @executable_path/../Frameworks
 for loader in "$APP"/Contents/Frameworks/libpixbufloader*; do
     [ -e "$loader" ] && set_rpath "$loader" @loader_path
 done
@@ -121,6 +121,6 @@ mkdir -p "$STAGE" "$OUT_DIR"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 rm -f "$OUT_DIR/$DMG_NAME"
-hdiutil create -volname "Kopico Desktop" -srcfolder "$STAGE" -fs HFS+ -format UDZO \
+hdiutil create -volname "AirEcho" -srcfolder "$STAGE" -fs HFS+ -format UDZO \
     -ov "$OUT_DIR/$DMG_NAME"
 echo "Built: $OUT_DIR/$DMG_NAME"

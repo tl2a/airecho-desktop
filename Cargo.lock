@@ -9,6 +9,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "airecho"
+version = "0.3.0"
+dependencies = [
+ "async-channel",
+ "dirs-next",
+ "gtk4",
+ "libadwaita",
+ "notify-rust",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "tray-icon",
+]
+
+[[package]]
 name = "async-broadcast"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -816,21 +831,6 @@ checksum = "0fbe853b403ae61a04233030ae8a79d94975281ed9770a1f9e246732b534b28d"
 dependencies = [
  "bitflags",
  "serde",
-]
-
-[[package]]
-name = "kopico-desktop"
-version = "0.2.1"
-dependencies = [
- "async-channel",
- "dirs-next",
- "gtk4",
- "libadwaita",
- "notify-rust",
- "objc2",
- "objc2-app-kit",
- "objc2-foundation",
- "tray-icon",
 ]
 
 [[package]]
