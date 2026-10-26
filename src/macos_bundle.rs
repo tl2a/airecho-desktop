@@ -9,6 +9,42 @@
 
 use std::{fs, path::Path};
 
+use objc2::MainThreadMarker;
+use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
+
+/// Show the Dock icon only while the AirEcho window is active.
+pub fn set_dock_icon_visible(visible: bool) {
+    let Some(mtm) = MainThreadMarker::new() else {
+        eprintln!("[macos] cannot update Dock visibility off the main thread");
+        return;
+    };
+    let app = NSApplication::sharedApplication(mtm);
+    let policy = if visible {
+        NSApplicationActivationPolicy::Regular
+    } else {
+        NSApplicationActivationPolicy::Accessory
+    };
+    if app.activationPolicy() == policy {
+        return;
+    }
+    if !app.setActivationPolicy(policy) {
+        eprintln!(
+            "[macos] failed to change activation policy from {:?} to {:?}",
+            app.activationPolicy(),
+            policy
+        );
+    }
+}
+
+/// Activate the app after its window has been presented from the tray.
+pub fn activate_application() {
+    let Some(mtm) = MainThreadMarker::new() else {
+        eprintln!("[macos] cannot activate the app off the main thread");
+        return;
+    };
+    NSApplication::sharedApplication(mtm).activate();
+}
+
 /// Call first thing in `main`, before any other thread exists.
 pub fn setup_environment() {
     let Some(exe) = std::env::current_exe().ok() else { return };

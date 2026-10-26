@@ -180,7 +180,7 @@ doesn't see its own discovery broadcast. Test it with two devices on the same ne
 | Crash at startup with `type '(null)'` and `handle > 0` | Two GLib copies (macOS): see [one GLib only](#macos-one-glib-only) |
 | `failed to select a version for gtk4-sys … links to the native library gtk-4` | `gtk4` and `libadwaita` crate versions don't match — bump them together (`cargo info libadwaita@<ver>` lists its `gtk` version) |
 | Icons missing | Install the Adwaita icon theme |
-| Nothing received in Local mode, log shows `found no relay addresses` | croc's discovery doesn't find the sender — set **Sender IP** in Advanced |
+| Nothing received in Local mode, log shows `found no relay addresses` | Neither AirEcho's multicast probe nor croc's own discovery found the sender — set **Sender IP** in Advanced |
 | Nothing received at all | Codes differ: the sender must use the exact Receive Code (`CROC_SECRET=…`) |
 | No notifications on Linux | Run `./dev-install.sh`; on GNOME the `.desktop` file must be installed |
 | No notifications on macOS / not in Settings → Notifications | Start with `cargo run` (or the `.app`), not `target/debug/…`; allow notifications when asked |

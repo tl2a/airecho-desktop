@@ -38,7 +38,7 @@ const ACTION_RELAY_MODE: &str = "relay-mode";
 const ACTION_RELAY_ADDRESS: &str = "relay-address";
 const ACTION_RELAY_PASSWORD: &str = "relay-password";
 const ACTION_RECEIVE_CODE: &str = "receive-code";
-/// Optional, Local mode only: `--ip` for when multicast discovery doesn't work.
+/// Optional Local mode manual override: `--ip` when automatic discovery cannot find the sender.
 const ACTION_SENDER_IP: &str = "sender-ip";
 /// Bool, default on: send text whenever the user copies some (Advanced → Send).
 const ACTION_SEND_CLIPBOARD: &str = "send-clipboard";
@@ -390,12 +390,17 @@ fn setup_app(app: &Application, transfers: &Transfers) {
 // ── Window ─────────────────────────────────────────────────────────────────────
 
 fn show_window(app: &Application) {
+    #[cfg(target_os = "macos")]
+    macos_bundle::set_dock_icon_visible(true);
+
     let window = app
         .windows()
         .into_iter()
         .next()
         .unwrap_or_else(|| build_ui(app).upcast());
     window.present();
+    #[cfg(target_os = "macos")]
+    macos_bundle::activate_application();
 }
 
 fn build_ui(app: &Application) -> ApplicationWindow {
@@ -417,6 +422,19 @@ fn build_ui(app: &Application) -> ApplicationWindow {
     let toast_overlay: ToastOverlay = builder.object("toast_overlay").expect("toast_overlay");
 
     window.set_application(Some(app));
+    #[cfg(target_os = "macos")]
+    window.connect_is_active_notify(|window| {
+        if window.is_active() {
+            macos_bundle::set_dock_icon_visible(true);
+        } else {
+            let window = window.clone();
+            glib::timeout_add_local_once(std::time::Duration::from_millis(250), move || {
+                if window.is_visible() && !window.is_active() {
+                    macos_bundle::set_dock_icon_visible(false);
+                }
+            });
+        }
+    });
 
     // ── Home: status text follows app.enabled ─────────────────────────────────
     let update_state_text = move |enabled: bool| {
@@ -531,6 +549,8 @@ fn build_ui(app: &Application) -> ApplicationWindow {
             .is_some_and(|app| action_bool(&app, ACTION_TRAY));
         if in_tray {
             window.set_visible(false);
+            #[cfg(target_os = "macos")]
+            macos_bundle::set_dock_icon_visible(false);
             println!("Window hidden — AirEcho is still running in the tray");
             glib::Propagation::Stop
         } else {

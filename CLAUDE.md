@@ -327,8 +327,8 @@ Platform notes:
   icons only with the *AppIndicator and KStatusNotifierItem Support* extension (KDE etc. work
   out of the box).
 - **macOS:** the icon is a template image (drawn black, recoloured by the menu bar). The Dock
-  icon stays while the window is hidden; hiding it would need
-  `NSApplication.setActivationPolicy(.accessory)` via `objc2-app-kit`.
+  icon appears only while the window is active; AirEcho switches to
+  `NSApplication.setActivationPolicy(.accessory)` while the window is unfocused or hidden.
 - The tray icon is generated in code (`tray_icon_image(colour)`); replace it with real artwork
   via `Icon::from_rgba` when the app has an icon. `Tray::set_enabled()` swaps it:
   on → `GREEN` drawn as-is; off → `NORMAL` (macOS: black **template**, recoloured by the menu
@@ -377,7 +377,7 @@ must be installed) again and again, because a croc receiver can't wait for a sen
 
 | `app.relay-mode` | croc flags | Poll every | Wait per run | Rate-limit back-off |
 |---|---|---|---|---|
-| `local` (default) | `--local`, or only `--ip <app.sender-ip>` when set | 3 s | croc exits by itself (~0.5–1 s) | — |
+| `local` (default) | multicast discovery → `--ip`, or `--local` fallback; manual `--ip <app.sender-ip>` override | 3 s | croc exits by itself (~0.5–1 s) | — |
 | `own-relay` | `--relay <app.relay-address>`, `CROC_PASS` | 10 s | 8 s | 60 s |
 | `public-relay` | — | 30 s | 25 s | 60 s |
 
@@ -393,8 +393,11 @@ Intervals count from the start of a run. Public relays allow ~30 joins/min per I
   `Receiving N files (…)`. The wait limit applies **only before** a sender is found — a
   transfer is never killed.
 - `--local`, no sender: exit 1, stdout `could not connect to : found no relay addresses`.
-- `--local --ip host[:port]` (port defaults to 9009) skips multicast discovery and dials
-  the sender's built-in relay directly — needed where discovery fails (seen on macOS).
+- AirEcho probes `239.255.255.250:9999` for croc's `croc<port>` multicast announcement,
+  then uses `--ip host:port`; if no announcement arrives or direct connection fails, it
+  falls back to `--local`.
+- `--ip host[:port]` (port defaults to 9009) skips croc's multicast discovery and dials
+  the sender's built-in relay directly — the app uses this when its own discovery succeeds.
   No sender there: exit 1 in ~0.5 s, stdout `… connection refused`.
 - Relay, no sender: croc waits in the room forever → our wait limit kills it.
 - Rate limited: stdout `… relay admission rate limited` (exit 1) or stderr
@@ -424,16 +427,16 @@ within ~200 ms. `find_croc()` also checks `/usr/local/bin`, `/opt/homebrew/bin`,
 
 **Settings** are stateful string actions created in `setup_app()`: `app.relay-mode`,
 `app.relay-address` (`host:port`), `app.relay-password`, `app.receive-code` (≥ 6 chars),
-`app.sender-ip` (optional, Local mode only; `receiver::is_valid_sender_ip`). An
+`app.sender-ip` (optional manual override in Local mode; `receiver::is_valid_sender_ip`). An
 invalid value is ignored by `change_state` (the row gets the `error` style); an accepted
 one restarts the loop. `receiver_config()` turns them into a `RelayMode`.
 
 **Debugging:** `AIRECHO_DEBUG=1 cargo run` (also accepts legacy `KOPICO_DEBUG=1`) logs
 every croc run — command line (the code and password are never printed), exit status,
 croc's status lines and stdout, and the outcome (`NoSender`, `Received`, `RateLimited`, …).
-`stdout: could not connect to : found no relay addresses` in Local mode means croc's
-multicast discovery found nobody (croc 11.5 gives up in < 1 s; unreliable on macOS) —
-set a Sender IP, which skips discovery.
+`stdout: could not connect to : found no relay addresses` in Local mode means neither
+AirEcho's multicast probe nor croc's discovery found a sender (croc 11.5 gives up in
+< 1 s); set a Sender IP if the automatic probe cannot reach the sender.
 
 **Tests:** `cargo test` runs the parser unit tests. The end-to-end tests start a local
 `croc relay` / `croc send` and real croc processes (own relay, local + `--ip`, rate

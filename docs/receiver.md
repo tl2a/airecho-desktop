@@ -11,7 +11,7 @@ again:
 
 | Mode | croc arguments | Poll every | Max wait per run | Rate-limit back-off |
 |---|---|---|---|---|
-| Local Network (default) | `--local` | 3 s | croc exits by itself (~0.5–1 s) | — |
+| Local Network (default) | multicast → `--ip`; otherwise `--local` | 3 s | croc exits by itself (~0.5–1 s) | — |
 | Local Network + Sender IP | `--ip <host[:port]>` | 3 s | croc exits by itself (~0.5 s) | — |
 | Own Relay | `--relay <host:port>` (+ `CROC_PASS`) | 10 s | 8 s | 60 s |
 | Public Relay | — | 30 s | 25 s | 60 s |
@@ -69,10 +69,14 @@ Details that shaped the parser:
 
 ## Finding the sender on a local network
 
-`--local` finds the sender by multicast discovery. In croc 11.5 the receiver gives up on
-discovery in under a second (`peer discovery timed out` in `croc --debug`), and on some
-machines — seen on macOS — it never finds a sender that is reachable. Hence the optional
-**Sender IP**:
+By default, AirEcho probes croc's IPv4 multicast group (`239.255.255.250:9999`) and looks
+for the sender's `croc<port>` announcement. When found, it connects directly with
+`croc --ip <sender-ip>:<port>`. This provides a direct-connect fallback on systems where
+croc's own local discovery fails, including macOS. If no compatible announcement arrives
+within 500 ms, or the discovered direct connection fails, AirEcho tries croc's normal
+`--local` discovery behavior.
+
+The optional **Sender IP** field remains a manual override:
 
 - AirEcho then runs `croc --ip <host[:port]>` (without `--local`) — the same as typing
   `CROC_SECRET=… croc --ip 192.168.0.110:9009 --yes` by hand.
@@ -101,7 +105,7 @@ included), the exit status, croc's status lines, its stdout, and the outcome.
 
 | Log | Meaning |
 |---|---|
-| `stdout: could not connect to : found no relay addresses` (Local) | discovery found nobody — normal when idle; if a sender *is* waiting, set a Sender IP |
+| `stdout: could not connect to : found no relay addresses` (Local) | neither app-side nor croc discovery found a sender — normal when idle; if a sender *is* waiting, set a Sender IP |
 | `stdout: … connection refused` (Sender IP) | nobody sending at that address right now |
 | `→ NoSender` after ~8 s / 25 s (relay modes) | nobody joined the room this round |
 | `→ RateLimited` | the relay refused us; next try in 60 s |

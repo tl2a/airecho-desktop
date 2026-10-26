@@ -50,7 +50,7 @@ application in `setup_app()`:
 | `app.relay-address` | string | `""` | Own Relay, `host:port` |
 | `app.relay-password` | string | `""` | Own Relay |
 | `app.receive-code` | string | built-in default | croc code, ≥ 6 characters |
-| `app.sender-ip` | string | `""` | Local mode, optional `host[:port]` |
+| `app.sender-ip` | string | `""` | Local mode, optional manual `host[:port]` override for automatic discovery |
 | `app.send-clipboard` | bool | `true` | Advanced → *Send Copied Text* |
 | `app.send-files` | — | | Advanced → *Send Files…* (file chooser) |
 | `app.show-window`, `app.quit` | — | | tray *Settings* / *Quit*, `Ctrl/Cmd+Q` |

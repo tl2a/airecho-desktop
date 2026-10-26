@@ -9,10 +9,10 @@
 //! |--------------|---------------|--------------|---------------------|
 //! | Local (LAN)  |  3 s          | croc exits on its own (~1 s) | n/a  |
 //!
-//! Local mode finds the sender by multicast discovery. Where that fails (e.g. macOS
-//! blocking multicast, or networks that filter it) an optional sender IP is passed as
-//! `--ip host[:port]` — croc then connects straight to the sender's built-in relay
-//! (port 9009 by default) and still exits within ~0.5 s if nobody is sending.
+//! Local mode probes croc's IPv4 multicast announcement first and connects with
+//! `--ip host:port` when it finds a sender. If no sender is discovered or that direct
+//! connection fails, it falls back to croc's `--local` discovery. An optional sender IP
+//! overrides discovery and directly targets the sender's built-in relay.
 //! | Own relay    | 10 s          |  8 s         | 60 s                |
 //! | Public relay | 30 s          | 25 s         | 60 s                |
 //!
@@ -42,7 +42,8 @@
 use std::{
     collections::HashSet,
     ffi::OsString,
-    io::Read,
+    io::{self, Read},
+    net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4},
     path::{Path, PathBuf},
     process::{Command, ExitStatus, Stdio},
     sync::{
@@ -55,6 +56,7 @@ use std::{
 };
 
 use gtk4::glib;
+use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 
 // ── Timing ─────────────────────────────────────────────────────────────────────
 
@@ -68,6 +70,11 @@ const WAIT_OWN_RELAY: Duration = Duration::from_secs(8);
 const WAIT_PUBLIC_RELAY: Duration = Duration::from_secs(25);
 
 const BACKOFF_RATE_LIMITED: Duration = Duration::from_secs(60);
+
+const DISCOVERY_GROUP: Ipv4Addr = Ipv4Addr::new(239, 255, 255, 250);
+const DISCOVERY_PORT: u16 = 9999;
+const DISCOVERY_INTERVAL: Duration = Duration::from_millis(20);
+const DISCOVERY_TIMEOUT: Duration = Duration::from_millis(500);
 
 /// How often the loop checks whether it has been asked to stop.
 const TICK: Duration = Duration::from_millis(200);
@@ -87,8 +94,8 @@ pub(crate) fn debug_enabled() -> bool {
 /// Where croc looks for a sender.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RelayMode {
-    /// LAN only (`croc --local`). Default: fast poll, no internet, no rate limit.
-    /// `sender_ip` (`host` or `host:port`) skips multicast discovery via `--ip`.
+    /// LAN only. Auto-discover via multicast, then fall back to `croc --local`.
+    /// `sender_ip` (`host` or `host:port`) manually overrides discovery via `--ip`.
     Local { sender_ip: Option<String> },
     /// A self-hosted relay (`croc relay`), e.g. `myhost:9009`.
     OwnRelay { address: String, password: String },
@@ -226,12 +233,56 @@ fn receive_loop(
         return fail(format!("cannot create {}: {err}", out_dir.display()));
     }
 
+    let mut last_discovery_error = None;
     while running.load(Ordering::Relaxed) {
         let started = Instant::now();
         let before = list_dir(out_dir);
+        let discovered_mode = match mode {
+            RelayMode::Local { sender_ip: None } => match discover_local_sender_ip(running) {
+                Ok(Some(ip)) => {
+                    last_discovery_error = None;
+                    if debug_enabled() {
+                        eprintln!("[croc-receive] multicast discovered sender at {ip}");
+                    }
+                    RelayMode::Local { sender_ip: Some(ip) }
+                }
+                Ok(None) => {
+                    last_discovery_error = None;
+                    mode.clone()
+                }
+                Err(err) => {
+                    let message = err.to_string();
+                    if last_discovery_error.as_deref() != Some(message.as_str()) {
+                        eprintln!("[croc-receive] local multicast discovery failed: {message}");
+                    }
+                    last_discovery_error = Some(message);
+                    mode.clone()
+                }
+            },
+            _ => mode.clone(),
+        };
+        if !running.load(Ordering::Relaxed) {
+            return;
+        }
+
+        let used_discovered_ip = matches!(
+            (&mode, &discovered_mode),
+            (
+                RelayMode::Local { sender_ip: None },
+                RelayMode::Local { sender_ip: Some(_) }
+            )
+        );
+        let mut outcome =
+            run_croc_tracked(&croc, running, Some(busy), &discovered_mode, out_dir, code);
+        if used_discovered_ip && matches!(&outcome, Ok(Outcome::NoSender)) {
+            if debug_enabled() {
+                eprintln!("[croc-receive] direct connection failed; retrying with --local");
+            }
+            outcome = run_croc_tracked(&croc, running, Some(busy), mode, out_dir, code);
+        }
 
         // Interval counts from the start of the run; a back-off counts from now
-        let next_run = match run_croc_tracked(&croc, running, Some(busy), mode, out_dir, code) {
+        let next_run = match outcome {
             Ok(Outcome::Received) => {
                 let after = list_dir(out_dir);
                 let mut new: Vec<String> = after.difference(&before).cloned().collect();
@@ -441,6 +492,116 @@ fn finished(status: ExitStatus, sender_found: bool) -> Outcome {
     }
 }
 
+/// Finds a croc sender by listening for its `croc<port>` multicast announcement.
+///
+/// This is the same peer-discovery exchange croc uses on its sender: probe the
+/// standard multicast group with `ok`, then connect directly to the announced relay.
+fn discover_local_sender_ip(running: &AtomicBool) -> io::Result<Option<String>> {
+    let interfaces = if_addrs::get_if_addrs()?;
+    let local_ips: HashSet<Ipv4Addr> = interfaces
+        .iter()
+        .filter_map(|interface| match interface.ip() {
+            IpAddr::V4(ip) => Some(ip),
+            IpAddr::V6(_) => None,
+        })
+        .collect();
+    let multicast_interfaces: Vec<Ipv4Addr> = local_ips
+        .iter()
+        .copied()
+        .filter(|ip| !ip.is_unspecified() && !ip.is_multicast())
+        .collect();
+    if multicast_interfaces.is_empty() {
+        return Ok(None);
+    }
+
+    let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
+    socket.set_reuse_address(true)?;
+    socket.bind(&SockAddr::from(SocketAddrV4::new(
+        Ipv4Addr::UNSPECIFIED,
+        DISCOVERY_PORT,
+    )))?;
+
+    let mut joined_interfaces = Vec::new();
+    let mut last_join_error = None;
+    for interface in multicast_interfaces {
+        match socket.join_multicast_v4(&DISCOVERY_GROUP, &interface) {
+            Ok(()) => joined_interfaces.push(interface),
+            Err(err) => last_join_error = Some(err),
+        }
+    }
+    if joined_interfaces.is_empty() {
+        return Err(last_join_error.unwrap_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::AddrNotAvailable,
+                "no multicast interface available",
+            )
+        }));
+    }
+
+    socket.set_multicast_ttl_v4(2)?;
+    let listener: std::net::UdpSocket = socket.try_clone()?.into();
+    listener.set_read_timeout(Some(DISCOVERY_INTERVAL))?;
+    let destination = SockAddr::from(SocketAddrV4::new(DISCOVERY_GROUP, DISCOVERY_PORT));
+    let deadline = Instant::now() + DISCOVERY_TIMEOUT;
+    let mut next_probe = Instant::now();
+    let mut probe_sent = false;
+    let mut last_probe_error = None;
+    let mut packet = [0; 1500];
+
+    while running.load(Ordering::Relaxed) && Instant::now() < deadline {
+        if Instant::now() >= next_probe {
+            for interface in &joined_interfaces {
+                let probe = socket
+                    .set_multicast_if_v4(interface)
+                    .and_then(|()| socket.send_to(b"ok", &destination).map(|_| ()));
+                match probe {
+                    Ok(()) => probe_sent = true,
+                    Err(err) => last_probe_error = Some(err),
+                }
+            }
+            next_probe = Instant::now() + DISCOVERY_INTERVAL;
+        }
+
+        match listener.recv_from(&mut packet) {
+            Ok((length, source)) => {
+                let SocketAddr::V4(source) = source else {
+                    continue;
+                };
+                let ip = *source.ip();
+                if local_ips.contains(&ip) {
+                    continue;
+                }
+                let Some(port) = discovered_relay_port(&packet[..length]) else {
+                    continue;
+                };
+                return Ok(Some(format!("{ip}:{port}")));
+            }
+            Err(err)
+                if matches!(
+                    err.kind(),
+                    io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+                ) => {}
+            Err(err) => return Err(err),
+        }
+    }
+
+    if !probe_sent {
+        if let Some(err) = last_probe_error {
+            return Err(err);
+        }
+    }
+    Ok(None)
+}
+
+fn discovered_relay_port(payload: &[u8]) -> Option<u16> {
+    let port = payload.strip_prefix(b"croc")?;
+    if port.is_empty() {
+        return Some(9009);
+    }
+    let port = std::str::from_utf8(port).ok()?.parse::<u16>().ok()?;
+    (port != 0).then_some(port)
+}
+
 /// Returns `Some(true)` if a pending signal said a sender was found.
 fn drain_signals(signals: &mpsc::Receiver<Signal>) -> Option<bool> {
     let mut found = None;
@@ -596,6 +757,17 @@ mod tests {
         assert!(!is_valid_sender_ip(""));
         assert!(!is_valid_sender_ip("192.168.1.20 9009"));
         assert!(!is_valid_sender_ip("http://192.168.1.20"));
+    }
+
+    #[test]
+    fn parses_croc_multicast_announcements() {
+        assert_eq!(discovered_relay_port(b"croc"), Some(9009));
+        assert_eq!(discovered_relay_port(b"croc9009"), Some(9009));
+        assert_eq!(discovered_relay_port(b"croc12345"), Some(12345));
+        assert_eq!(discovered_relay_port(b"croc0"), None);
+        assert_eq!(discovered_relay_port(b"croc65536"), None);
+        assert_eq!(discovered_relay_port(b"croc9009,9010"), None);
+        assert_eq!(discovered_relay_port(b"other9009"), None);
     }
 
     #[test]
