@@ -45,9 +45,10 @@ CROC_SECRET=<your-code> croc send photo.jpg            # a file (or several, or 
 CROC_SECRET=<your-code> croc send --text "hello"       # text → lands on the clipboard
 ```
 
-croc requires the code in the `CROC_SECRET` environment variable on Linux/macOS. If you
-set a **Sender IP** in AirEcho, don't use `--no-local` on the sender — AirEcho connects to
-the small relay croc starts on the sender (port 9009).
+croc requires the code in the `CROC_SECRET` environment variable on Linux/macOS. AirEcho
+tries croc-compatible multicast discovery in Local mode; if it fails, set a **Sender IP**.
+Don't use `--no-local` on the sender — AirEcho connects to the small relay croc starts
+there (usually port 9009).
 
 ## Sending from AirEcho
 
@@ -160,7 +161,7 @@ The short version — each one is explained in
 |---|---|
 | croc can't wait for a sender; each run finds one or exits | Run croc in a loop; intervals per mode, 60 s back-off when a relay rate-limits |
 | Public croc relays allow ~30 joins/min | Public mode checks every 30 s; **Local** is the default |
-| croc's LAN discovery fails on some machines (seen on macOS) | Optional **Sender IP** — croc connects to the sender directly |
+| croc's LAN discovery fails on some machines (seen on macOS) | AirEcho probes croc's multicast announcement and connects directly; optional **Sender IP** override |
 | `tray-icon`'s default Linux backend uses GTK 3 | Use the `ksni` (D-Bus) backend |
 | GLib has no macOS notification backend | Linux: `gio::Notification`; macOS: `notify-rust` |
 | macOS notifications require a signed app bundle | `cargo run` runs AirEcho from an ad-hoc-signed `AirEcho.app` |

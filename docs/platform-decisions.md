@@ -121,9 +121,13 @@ Details in [receiver.md](receiver.md). The decisions in short:
 | public relays admit ~30 joins/min | poll every 30 s there; 60 s back-off on rate limit; **Local** is the default |
 | a relay receiver waits forever | end a run after 8 s / 25 s — but only before a sender is found |
 | croc prints progress on stderr and never names received files reliably | detect phases on stderr; diff the output folder; `--rename` so nothing is overwritten |
-| LAN discovery fails on some machines (seen on macOS) | optional Sender IP → `croc --ip` |
+| croc LAN discovery fails on some machines (seen on macOS) | probe croc's multicast announcement and connect via `--ip`; retain optional manual Sender IP override |
 | codes can't be passed as arguments | `CROC_SECRET` (and `CROC_PASS` for relay passwords) |
 | background thread → UI | `async-channel` + `glib::spawn_future_local`; never poll from `idle_add` (it spins a CPU core) |
+
+On macOS, AirEcho uses the accessory activation policy while its window is not active, so
+the background tray app does not remain in the Dock. Presenting the window switches back
+to regular activation policy.
 
 ## Sending
 

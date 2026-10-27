@@ -1,6 +1,6 @@
 [package]
 name = "airecho"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 
 [dependencies]
@@ -16,13 +16,18 @@ tray-icon = { version = "0.26.1", default-features = false, features = ["ksni"] 
 dirs-next = "2"
 # Wakes the GTK main loop when the croc thread reports an event (no polling)
 async-channel = "2"
+# Enumerate IPv4 interfaces for croc-compatible multicast sender discovery.
+if-addrs = "0.13"
+# Multicast discovery needs address reuse and per-interface multicast selection.
+socket2 = "0.6"
 
 # Clipboard on macOS: GTK 4.22's macOS clipboard passes MIME types where AppKit wants
 # UTIs ("'text/plain' is not a valid UTI string") and silently copies nothing, so
 # received text goes to NSPasteboard directly. Same versions tray-icon already uses.
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-app-kit = { version = "0.3", default-features = false, features = [
-    "std", "NSPasteboard", "NSPasteboardItem", "NSApplication", "NSResponder",
+    "std", "NSPasteboard", "NSPasteboardItem", "NSApplication", "NSRunningApplication",
+    "NSResponder",
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
     "std", "NSString", "NSArray", "NSEnumerator", "NSURL",
