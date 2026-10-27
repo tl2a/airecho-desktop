@@ -4,6 +4,8 @@
     <file alias="ui/window.ui" preprocess="xml-stripblanks">window.ui</file>
     <file>icons/in.tl2a.airEcho-status-icon-active.svg</file>
     <file>icons/in.tl2a.airEcho-status-icon-inactive.svg</file>
+    <file>icons/in.tl2a.airEcho-status-icon-active-16.png</file>
+    <file>icons/in.tl2a.airEcho-status-icon-inactive-16.png</file>
     <!-- Picked up automatically by AdwApplication (resource base path + /style.css) -->
     <file>style.css</file>
   </gresource>

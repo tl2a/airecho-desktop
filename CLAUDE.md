@@ -329,11 +329,9 @@ Platform notes:
 - **macOS:** the icon is a template image (drawn black, recoloured by the menu bar). The Dock
   icon appears only while the window is active; AirEcho switches to
   `NSApplication.setActivationPolicy(.accessory)` while the window is unfocused or hidden.
-- The tray icon is generated in code (`tray_icon_image(colour)`); replace it with real artwork
-  via `Icon::from_rgba` when the app has an icon. `Tray::set_enabled()` swaps it:
-  on → `GREEN` drawn as-is; off → `NORMAL` (macOS: black **template**, recoloured by the menu
-  bar; elsewhere Adwaita blue). A template icon can never be coloured — that's why the
-  enabled icon must use `set_icon`, not `set_icon_templated`.
+- `Tray::set_enabled()` swaps the status artwork. Linux uses 16×16 PNGs rendered from the
+  status SVGs for the GNOME panel; other platforms use the SVGs directly. Regenerate a PNG
+  with `rsvg-convert --width 16 --height 16 <source.svg> > <output.png>`.
 
 ### Notifications (`src/notification.rs`)
 

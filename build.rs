@@ -70,6 +70,18 @@ fn main() {
             .join("data/icons/in.tl2a.airEcho-status-icon-inactive.svg")
             .display()
     );
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_dir
+            .join("data/icons/in.tl2a.airEcho-status-icon-active-16.png")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_dir
+            .join("data/icons/in.tl2a.airEcho-status-icon-inactive-16.png")
+            .display()
+    );
 
     let gresource_out = out_dir.join(format!("{APP_ID}.gresource"));
 

@@ -89,6 +89,13 @@ pub fn install_menu_handler() {
 fn tray_icon_image(enabled: bool) -> Icon {
     use gtk4::gdk::prelude::*;
 
+    #[cfg(target_os = "linux")]
+    let name = if enabled {
+        "in.tl2a.airEcho-status-icon-active-16.png"
+    } else {
+        "in.tl2a.airEcho-status-icon-inactive-16.png"
+    };
+    #[cfg(not(target_os = "linux"))]
     let name = if enabled {
         "in.tl2a.airEcho-status-icon-active.svg"
     } else {
