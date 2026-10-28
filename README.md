@@ -1,4 +1,8 @@
-# AirEcho
+<p align="center">
+  <img src="docs/assets/logo.svg" alt="AirEcho logo" width="160">
+</p>
+
+<h1 align="center">AirEcho</h1>
 
 AirEcho is a small background app that **sends and receives files and text with
 [croc](https://github.com/schollz/croc)** — without you having to type a `croc` command
@@ -8,6 +12,10 @@ the other; right-click files and choose *Send with AirEcho*. Received files land
 
 It is a GNOME-style app (GTK 4 + libadwaita, written in Rust) that runs on **Linux** and
 **macOS**.
+
+<p align="center">
+  <img src="docs/assets/app.png" alt="AirEcho running on the Home tab" width="600">
+</p>
 
 ## What it does
 
@@ -22,7 +30,10 @@ It is a GNOME-style app (GTK 4 + libadwaita, written in Rust) that runs on **Lin
   Quick Actions) or *Open With → AirEcho*; Nautilus, Dolphin, Nemo, and Thunar
   can use *Send with AirEcho* after `./dev-install.sh`; or Advanced → *Send Files…*.
 - **Lives in the tray / menu bar.** Closing the window hides it; the tray icon turns
-  green while AirEcho is on. Tray menu: *Enable*, *Settings*, *Quit*.
+  green while AirEcho is on. Tray menu: *Enable AirEcho* / *Disable AirEcho*,
+  *Settings*, *Quit*.
+- **Header menu.** Open *About* for project links, credits, acknowledgements,
+  and legal information, or choose *Quit* to terminate the app.
 - **Notifies you** when files or text arrive, and when AirEcho is switched on.
 - **Three ways to find the sender:**
 

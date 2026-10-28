@@ -117,7 +117,8 @@ exits, so turning AirEcho off never blocks the UI.
 ## UI
 
 One `Adw.ApplicationWindow` with a `ViewStack` of two tabs, switched from the header bar
-(or a bottom bar on narrow windows):
+(or a bottom bar on narrow windows). The header's trailing menu opens About AirEcho or
+quits the application:
 
 - **Home:** the power toggle and a status line.
 - **Advanced:** receive settings (relay mode, relay address/password, sender IP, receive

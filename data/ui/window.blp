@@ -25,6 +25,13 @@ Adw.ApplicationWindow window {
         stack: view_stack;
         policy: wide;
       };
+
+      [end]
+      Gtk.MenuButton main_menu_button {
+        icon-name: "view-more-symbolic";
+        tooltip-text: _("Main Menu");
+        accessible-role: button;
+      }
     }
 
     content: Adw.ToastOverlay toast_overlay {

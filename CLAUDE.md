@@ -296,7 +296,7 @@ quitting. Tray menu:
 
 | Item | Action | Behaviour |
 |---|---|---|
-| Enable (checkbox) | `app.enabled` | Stateful bool; same state as the Home page power toggle. Icon turns **green** when on |
+| Enable AirEcho / Disable AirEcho | `app.toggle-enabled` | Toggles the same state as the Home page power toggle. Icon turns **green** when on |
 | Settings | `app.show-window` | Re-presents the hidden window (creates it if needed) |
 | Quit | `app.quit` (`Ctrl/Cmd+Q`) | `app.quit()` → shutdown drops the tray + hold guard → process exits |
 

@@ -7,11 +7,12 @@
 use adw::prelude::*;
 use adw::Application;
 use gtk4::{gio, glib};
-use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
+use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
 /// Action names — the tray menu item ids double as these.
 pub const ACTION_ENABLED: &str = "enabled";
+pub const ACTION_TOGGLE_ENABLED: &str = "toggle-enabled";
 pub const ACTION_SHOW_WINDOW: &str = "show-window";
 pub const ACTION_QUIT: &str = "quit";
 /// Not in the tray menu: toggles the tray itself (Advanced → Show in System Tray).
@@ -22,19 +23,24 @@ pub const ACTION_TRAY: &str = "tray";
 pub struct Tray {
     icon: TrayIcon,
     _hold: gio::ApplicationHoldGuard,
-    enable_item: CheckMenuItem,
+    toggle_enabled_item: MenuItem,
 }
 
 impl Tray {
     /// Must be called on the main thread with GTK initialised (startup or later).
     pub fn new(app: &Application, enabled: bool) -> Self {
-        let enable_item = CheckMenuItem::with_id(ACTION_ENABLED, "Enable", true, enabled, None);
+        let toggle_enabled_item = MenuItem::with_id(
+            ACTION_TOGGLE_ENABLED,
+            enabled_menu_label(enabled),
+            true,
+            None,
+        );
         let settings_item = MenuItem::with_id(ACTION_SHOW_WINDOW, "Settings", true, None);
         let quit_item = MenuItem::with_id(ACTION_QUIT, "Quit", true, None);
 
         let menu = Menu::new();
         menu.append_items(&[
-            &enable_item,
+            &toggle_enabled_item,
             &settings_item,
             &PredefinedMenuItem::separator(),
             &quit_item,
@@ -51,15 +57,16 @@ impl Tray {
             icon,
             // Keep the process alive while every window is hidden in the tray
             _hold: app.hold(),
-            enable_item,
+            toggle_enabled_item,
         };
         tray.set_icon(enabled);
         tray
     }
 
-    /// Mirror the `app.enabled` state in the menu checkmark and status icon.
+    /// Mirror the enabled state in the menu action label and status icon.
     pub fn set_enabled(&self, enabled: bool) {
-        self.enable_item.set_checked(enabled);
+        self.toggle_enabled_item
+            .set_text(enabled_menu_label(enabled));
         self.set_icon(enabled);
     }
 
@@ -68,6 +75,10 @@ impl Tray {
             eprintln!("Failed to update tray icon: {err}");
         }
     }
+}
+
+fn enabled_menu_label(enabled: bool) -> &'static str {
+    if enabled { "Disable AirEcho" } else { "Enable AirEcho" }
 }
 
 /// Route tray menu clicks to `app.*` actions. Call once, at startup.
