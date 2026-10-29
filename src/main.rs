@@ -28,7 +28,7 @@ use tray::{
 };
 
 const APP_ID: &str = "in.tl2a.airEcho";
-const PROJECT_URL: &str = "https://airecho.tl2a.in";
+const PROJECT_URL: &str = "https://github.com/tl2a/airecho-desktop";
 const ISSUE_URL: &str = "https://github.com/tl2a/airecho-desktop/issues";
 
 /// Default receive code.  Both sender and receiver must agree on this value.
