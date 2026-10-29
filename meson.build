@@ -1,7 +1,7 @@
 project(
   'airecho',
   'rust',
-  version: '0.4.0',
+  version: '0.4.2',
   license: 'GPL-3.0-or-later',
   meson_version: '>= 1.0',
 )
@@ -55,6 +55,9 @@ compiled_gresource = custom_target(
   input:   [
     gresource_xml,
     data_dir / 'style.css',
+    data_dir / 'icons/in.tl2a.airEcho.svg',
+    data_dir / 'macos/index.theme',
+    data_dir / 'macos/about-icon.png',
     data_dir / 'icons/in.tl2a.airEcho-status-icon-active.svg',
     data_dir / 'icons/in.tl2a.airEcho-status-icon-inactive.svg',
   ] + blp_to_ui,

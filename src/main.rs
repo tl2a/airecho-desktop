@@ -3,8 +3,8 @@ use std::rc::Rc;
 
 use adw::prelude::*;
 use adw::{
-    ActionRow, Application, ApplicationWindow, ComboRow, EntryRow, PasswordEntryRow, SwitchRow,
-    Toast, ToastOverlay,
+    AboutDialog, ActionRow, Application, ApplicationWindow, ComboRow, EntryRow, PasswordEntryRow,
+    SwitchRow, Toast, ToastOverlay,
 };
 use adw::gtk::Label;
 use gtk4::{gio, glib};
@@ -23,9 +23,13 @@ mod macos_services;
 
 use receiver::RelayMode;
 use transfers::Transfers;
-use tray::{ACTION_ENABLED, ACTION_QUIT, ACTION_SHOW_WINDOW, ACTION_TRAY, Tray};
+use tray::{
+    ACTION_ENABLED, ACTION_QUIT, ACTION_SHOW_WINDOW, ACTION_TOGGLE_ENABLED, ACTION_TRAY, Tray,
+};
 
 const APP_ID: &str = "in.tl2a.airEcho";
+const PROJECT_URL: &str = "https://github.com/tl2a/airecho-desktop";
+const ISSUE_URL: &str = "https://github.com/tl2a/airecho-desktop/issues";
 
 /// Default receive code.  Both sender and receiver must agree on this value.
 /// Users can override it in Advanced → Receive Code.
@@ -280,6 +284,20 @@ fn setup_app(app: &Application, transfers: &Transfers) {
     }
     app.add_action(&enabled_action);
 
+    let toggle_enabled_action = gio::SimpleAction::new(ACTION_TOGGLE_ENABLED, None);
+    {
+        let app_w = app.downgrade();
+        toggle_enabled_action.connect_activate(move |_, _| {
+            if let Some(app) = app_w.upgrade() {
+                app.change_action_state(
+                    ACTION_ENABLED,
+                    &(!action_bool(&app, ACTION_ENABLED)).to_variant(),
+                );
+            }
+        });
+    }
+    app.add_action(&toggle_enabled_action);
+
     // ── app.tray ──────────────────────────────────────────────────────────────
     let tray_action = gio::SimpleAction::new_stateful(ACTION_TRAY, None, &true.to_variant());
     {
@@ -321,6 +339,18 @@ fn setup_app(app: &Application, transfers: &Transfers) {
     }
     app.add_action(&quit_action);
     app.set_accels_for_action("app.quit", &["<primary>q"]);
+
+    // ── app.about ────────────────────────────────────────────────────────────
+    let about_action = gio::SimpleAction::new("about", None);
+    {
+        let app_w = app.downgrade();
+        about_action.connect_activate(move |_, _| {
+            let Some(app) = app_w.upgrade() else { return };
+            let Some(parent) = app.active_window() else { return };
+            show_about_dialog(&parent);
+        });
+    }
+    app.add_action(&about_action);
 
     // ── Receiver settings: app.relay-mode / relay-address / relay-password / receive-code ──
     // Stateful string actions: the Advanced page reads them for its initial values and
@@ -407,6 +437,8 @@ fn build_ui(app: &Application) -> ApplicationWindow {
     let builder = gtk4::Builder::from_resource("/in/tl2a/airEcho/ui/window.ui");
 
     let window: ApplicationWindow   = builder.object("window").expect("window");
+    let main_menu_button: gtk4::MenuButton =
+        builder.object("main_menu_button").expect("main_menu_button");
     let state_title: Label          = builder.object("state_title").expect("state_title");
     let state_description: Label    = builder.object("state_description").expect("state_description");
     let tray_row: SwitchRow         = builder.object("tray_row").expect("tray_row");
@@ -420,6 +452,11 @@ fn build_ui(app: &Application) -> ApplicationWindow {
     let sender_ip_row: EntryRow     = builder.object("sender_ip_row").expect("sender_ip_row");
     let save_to_row: ActionRow      = builder.object("save_to_row").expect("save_to_row");
     let toast_overlay: ToastOverlay = builder.object("toast_overlay").expect("toast_overlay");
+
+    let menu = gio::Menu::new();
+    menu.append(Some("About"), Some("app.about"));
+    menu.append(Some("Quit"), Some("app.quit"));
+    main_menu_button.set_menu_model(Some(&menu));
 
     window.set_application(Some(app));
     #[cfg(target_os = "macos")]
@@ -559,4 +596,34 @@ fn build_ui(app: &Application) -> ApplicationWindow {
     });
 
     window
+}
+
+fn show_about_dialog(parent: &impl IsA<gtk4::Widget>) {
+    #[cfg(target_os = "macos")]
+    if let Some(display) = gtk4::gdk::Display::default() {
+        gtk4::IconTheme::for_display(&display)
+            .add_resource_path("/in/tl2a/airEcho/icons/hicolor");
+    }
+
+    let dialog = AboutDialog::new();
+    dialog.set_application_name("AirEcho");
+    dialog.set_application_icon(APP_ID);
+    dialog.set_version(env!("CARGO_PKG_VERSION"));
+    dialog.set_website(PROJECT_URL);
+    dialog.set_issue_url(ISSUE_URL);
+    dialog.set_developers(&["Arpan Biswas https://tl2a.in"]);
+    dialog.add_acknowledgement_section(
+        Some("Special Thanks"),
+        &["croc https://github.com/schollz/croc"],
+    );
+    dialog.add_acknowledgement_section(
+        Some("Libraries and tools"),
+        &[
+            "GTK https://www.gtk.org",
+            "libadwaita https://gnome.pages.gitlab.gnome.org/libadwaita/",
+        ],
+    );
+    dialog.set_copyright("© 2025-2026 AirEcho Contributors");
+    dialog.set_license_type(gtk4::License::Gpl30);
+    dialog.present(Some(parent));
 }

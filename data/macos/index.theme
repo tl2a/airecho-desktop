@@ -1,0 +1,9 @@
+[Icon Theme]
+Name=AirEcho
+Comment=AirEcho application icons
+Directories=256x256/apps
+
+[256x256/apps]
+Size=256
+Type=Fixed
+Context=Applications
