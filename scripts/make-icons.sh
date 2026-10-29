@@ -36,6 +36,8 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
         rsvg-convert -w "$size" -h "$size" "$MACOS_SVG" -o "$ICONSET/icon_${size}x${size}.png"
         rsvg-convert -w $((size * 2)) -h $((size * 2)) "$MACOS_SVG" -o "$ICONSET/icon_${size}x${size}@2x.png"
     done
+    rsvg-convert -w 256 -h 256 "$MACOS_SVG" -o "$REPO_ROOT/data/macos/about-icon.png"
     iconutil -c icns "$ICONSET" -o "$REPO_ROOT/data/macos/AppIcon.icns"
     echo "Wrote data/macos/AppIcon.icns"
+    echo "Wrote data/macos/about-icon.png"
 fi

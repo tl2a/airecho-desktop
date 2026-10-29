@@ -55,6 +55,9 @@ compiled_gresource = custom_target(
   input:   [
     gresource_xml,
     data_dir / 'style.css',
+    data_dir / 'icons/in.tl2a.airEcho.svg',
+    data_dir / 'macos/index.theme',
+    data_dir / 'macos/about-icon.png',
     data_dir / 'icons/in.tl2a.airEcho-status-icon-active.svg',
     data_dir / 'icons/in.tl2a.airEcho-status-icon-inactive.svg',
   ] + blp_to_ui,

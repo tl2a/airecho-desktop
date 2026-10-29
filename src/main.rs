@@ -599,6 +599,12 @@ fn build_ui(app: &Application) -> ApplicationWindow {
 }
 
 fn show_about_dialog(parent: &impl IsA<gtk4::Widget>) {
+    #[cfg(target_os = "macos")]
+    if let Some(display) = gtk4::gdk::Display::default() {
+        gtk4::IconTheme::for_display(&display)
+            .add_resource_path("/in/tl2a/airEcho/icons/hicolor");
+    }
+
     let dialog = AboutDialog::new();
     dialog.set_application_name("AirEcho");
     dialog.set_application_icon(APP_ID);

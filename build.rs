@@ -61,6 +61,20 @@ fn main() {
     println!(
         "cargo:rerun-if-changed={}",
         manifest_dir
+            .join("data/icons/in.tl2a.airEcho.svg")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_dir.join("data/macos/about-icon.png").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_dir.join("data/macos/index.theme").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_dir
             .join("data/icons/in.tl2a.airEcho-status-icon-active.svg")
             .display()
     );

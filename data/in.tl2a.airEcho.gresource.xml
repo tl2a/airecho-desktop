@@ -2,6 +2,8 @@
 <gresources>
   <gresource prefix="/in/tl2a/airEcho">
     <file alias="ui/window.ui" preprocess="xml-stripblanks">window.ui</file>
+    <file alias="icons/hicolor/index.theme">macos/index.theme</file>
+    <file alias="icons/hicolor/256x256/apps/in.tl2a.airEcho.png">macos/about-icon.png</file>
     <file>icons/in.tl2a.airEcho-status-icon-active.svg</file>
     <file>icons/in.tl2a.airEcho-status-icon-inactive.svg</file>
     <file>icons/in.tl2a.airEcho-status-icon-active-16.png</file>
