@@ -70,7 +70,11 @@ usual install folders (`receiver::find_croc`). The release notes say so.
 - The GTK plugin's runtime hook forces `GDK_BACKEND=x11` and `GTK_THEME=Adwaita:light`
   (workarounds for GTK 3). Both are removed: the first loses Wayland, the second breaks
   libadwaita's dark mode and accent colours.
-- The *Send with AirEcho* file-manager entries aren't installed by an AppImage.
+- File-manager entries are not installed automatically by an AppImage. Users can opt in to
+  an integration for Nautilus, Nemo, Dolphin, or Thunar from AirEcho's header menu; Nautilus
+  additionally requires the system `nautilus-python` package. For Flatpak Dolphin, AirEcho
+  registers the service menu in Dolphin's private data directory and launches AirEcho through
+  `flatpak-spawn --host`.
 
 ## Building locally
 

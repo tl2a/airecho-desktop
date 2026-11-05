@@ -11,7 +11,7 @@ How AirEcho sends copied text and files with croc. Code: `src/transfers.rs` (coo
 | You **copy text** anywhere | `croc send --text "<text>"` | AirEcho on + Advanced → *Send Copied Text* on (default) |
 | Finder → right-click → **Send with AirEcho** (Services / Quick Actions) | `croc send <files>` | macOS, AirEcho started from its bundle |
 | Finder → right-click → **Open With → AirEcho** | `croc send <files>` | macOS |
-| Nautilus, Dolphin, Nemo, or Thunar → right-click → **Send with AirEcho** | `croc send <files>` | Linux; `nautilus-python` for Nautilus; `./dev-install.sh` |
+| Nautilus, Dolphin, Nemo, or Thunar → right-click → **Send with AirEcho** | `croc send <files>` | Linux; install from the app's header menu or run `./dev-install.sh` for development |
 | `airecho <files>` | `croc send <files>` | Linux (macOS: starts a second AirEcho — use Finder) |
 | Advanced → **Send Files…** | `croc send <files>` | — |
 

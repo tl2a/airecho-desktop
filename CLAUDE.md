@@ -60,6 +60,7 @@ airecho/
 │   ├── sender.rs                               # croc send: text + files (background thread)
 │   ├── croc_names.rs                           # Names croc's receiver accepts; stages unsafe ones
 │   ├── clipboard.rs                            # Write received text; watch copied text
+│   ├── file_manager.rs                         # Linux file-manager integration installers
 │   ├── macos_services.rs                       # macOS Finder "Send with AirEcho" (NSServices)
 │   ├── macos_bundle.rs                         # Release .app: point GTK at bundled data
 │   ├── tray.rs                                 # System tray icon + menu (tray-icon crate)
@@ -329,9 +330,10 @@ Platform notes:
 - **macOS:** the icon is a template image (drawn black, recoloured by the menu bar). The Dock
   icon appears only while the window is active; AirEcho switches to
   `NSApplication.setActivationPolicy(.accessory)` while the window is unfocused or hidden.
-- `Tray::set_enabled()` swaps the status artwork. Linux uses 16×16 PNGs rendered from the
-  status SVGs for the GNOME panel; other platforms use the SVGs directly. Regenerate a PNG
-  with `rsvg-convert --width 16 --height 16 <source.svg> > <output.png>`.
+- `Tray::set_enabled()` swaps the status artwork. Linux uses a theme-named symbolic SVG while
+  disabled and a 16×16 PNG while enabled; other platforms use the status SVGs directly.
+  Regenerate the enabled PNG with
+  `rsvg-convert --width 16 --height 16 <source.svg> > <output.png>`.
 
 ### Notifications (`src/notification.rs`)
 

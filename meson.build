@@ -115,3 +115,8 @@ install_data(
   'data/icons/in.tl2a.airEcho.svg',
   install_dir: datadir / 'icons' / 'hicolor' / 'scalable' / 'apps',
 )
+
+install_data(
+  'data/icons/airecho-status-inactive-symbolic.svg',
+  install_dir: datadir / 'icons' / 'hicolor' / 'scalable' / 'status',
+)

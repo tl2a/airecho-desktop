@@ -11,6 +11,8 @@ use gtk4::{gio, glib};
 
 mod clipboard;
 mod croc_names;
+#[cfg(target_os = "linux")]
+mod file_manager;
 mod notification;
 mod receiver;
 mod sender;
@@ -352,6 +354,9 @@ fn setup_app(app: &Application, transfers: &Transfers) {
     }
     app.add_action(&about_action);
 
+    #[cfg(target_os = "linux")]
+    file_manager::register_actions(app);
+
     // ── Receiver settings: app.relay-mode / relay-address / relay-password / receive-code ──
     // Stateful string actions: the Advanced page reads them for its initial values and
     // changes them with change_action_state(); each accepted change restarts the loop.
@@ -454,6 +459,15 @@ fn build_ui(app: &Application) -> ApplicationWindow {
     let toast_overlay: ToastOverlay = builder.object("toast_overlay").expect("toast_overlay");
 
     let menu = gio::Menu::new();
+    #[cfg(target_os = "linux")]
+    {
+        let file_manager_menu = gio::Menu::new();
+        file_manager_menu.append(Some("Nautilus (Files)"), Some("app.install-nautilus"));
+        file_manager_menu.append(Some("Nemo"), Some("app.install-nemo"));
+        file_manager_menu.append(Some("Dolphin"), Some("app.install-dolphin"));
+        file_manager_menu.append(Some("Thunar"), Some("app.install-thunar"));
+        menu.append_submenu(Some("Install File Manager Integration"), &file_manager_menu);
+    }
     menu.append(Some("About"), Some("app.about"));
     menu.append(Some("Quit"), Some("app.quit"));
     main_menu_button.set_menu_model(Some(&menu));

@@ -48,6 +48,8 @@ rm -rf "$APPDIR"
 install -Dm755 "$TARGET_DIR/release/airecho" "$APPDIR/usr/bin/airecho"
 install -Dm644 "data/$APP_ID.desktop" "$APPDIR/usr/share/applications/$APP_ID.desktop"
 install -Dm644 "data/icons/$APP_ID.svg" "$APPDIR/usr/share/icons/hicolor/scalable/apps/$APP_ID.svg"
+install -Dm644 "data/icons/airecho-status-inactive-symbolic.svg" \
+    "$APPDIR/usr/share/icons/hicolor/scalable/status/airecho-status-inactive-symbolic.svg"
 # The UI's symbolic icons come from the Adwaita theme, which not every desktop has (KDE)
 cp -a /usr/share/icons/Adwaita "$APPDIR/usr/share/icons/"
 cp /usr/share/icons/hicolor/index.theme "$APPDIR/usr/share/icons/hicolor/"

@@ -43,6 +43,12 @@ install_linux() {
     cp "$REPO_ROOT/data/icons/$APP_ID.svg" "$icon_dir/$APP_ID.svg"
     echo "Installed: $icon_dir/$APP_ID.svg"
 
+    local status_icon_dir="$HOME/.local/share/icons/hicolor/scalable/status"
+    mkdir -p "$status_icon_dir"
+    cp "$REPO_ROOT/data/icons/airecho-status-inactive-symbolic.svg" \
+        "$status_icon_dir/airecho-status-inactive-symbolic.svg"
+    echo "Installed: $status_icon_dir/airecho-status-inactive-symbolic.svg"
+
     # Right-click → "Send with AirEcho" in Nautilus (needs nautilus-python)
     local nautilus_dir="$HOME/.local/share/nautilus-python/extensions"
     mkdir -p "$nautilus_dir"
