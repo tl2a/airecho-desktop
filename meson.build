@@ -1,7 +1,7 @@
 project(
   'airecho',
   'rust',
-  version: '0.4.2',
+  version: '0.5.0',
   license: 'GPL-3.0-or-later',
   meson_version: '>= 1.0',
 )
@@ -114,4 +114,9 @@ install_data(
 install_data(
   'data/icons/in.tl2a.airEcho.svg',
   install_dir: datadir / 'icons' / 'hicolor' / 'scalable' / 'apps',
+)
+
+install_data(
+  'data/icons/airecho-status-inactive-symbolic.svg',
+  install_dir: datadir / 'icons' / 'hicolor' / 'scalable' / 'status',
 )

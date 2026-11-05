@@ -27,13 +27,16 @@ It is a GNOME-style app (GTK 4 + libadwaita, written in Rust) that runs on **Lin
 - **Sends what you copy.** Copy text anywhere and AirEcho sends it (switch off in Advanced →
   *Send Copied Text*). Copies that password managers mark as private are never sent.
 - **Sends files** from the right-click menu: Finder → *Send with AirEcho* (Services /
-  Quick Actions) or *Open With → AirEcho*; Nautilus, Dolphin, Nemo, and Thunar
-  can use *Send with AirEcho* after `./dev-install.sh`; or Advanced → *Send Files…*.
+  Quick Actions) or *Open With → AirEcho*; on Linux, use the installed file-manager action.
+  Advanced → *Send Files…* is also available.
 - **Lives in the tray / menu bar.** Closing the window hides it; the tray icon turns
   green while AirEcho is on. Tray menu: *Enable AirEcho* / *Disable AirEcho*,
   *Settings*, *Quit*.
 - **Header menu.** Open *About* for project links, credits, acknowledgements,
   and legal information, or choose *Quit* to terminate the app.
+- **Linux file-manager integration.** Open the top-right **⋮** menu → *Install File Manager
+  Integration* → choose Nautilus, Nemo, Dolphin, or Thunar. This adds *Send with AirEcho* to
+  that file manager's context menu.
 - **Notifies you** when files or text arrive, and when AirEcho is switched on.
 - **Three ways to find the sender:**
 
@@ -111,7 +114,7 @@ are checked at build time. Check yours with
 ```sh
 # Fedora:         sudo dnf install gtk4-devel libadwaita-devel blueprint-compiler glib2-devel
 # Debian/Ubuntu:  sudo apt install libgtk-4-dev libadwaita-1-dev blueprint-compiler libglib2.0-dev-bin
-./dev-install.sh      # once: .desktop file (notifications) + "Send with AirEcho" menus
+./dev-install.sh      # once: .desktop file, tray icon, and "Send with AirEcho" menus
 cargo run
 ```
 

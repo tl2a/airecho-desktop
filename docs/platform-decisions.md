@@ -46,6 +46,9 @@ Consequences:
   only forwards the id to the GTK thread (`glib::idle_add_once`) and activates `app.<id>`.
 - GNOME Shell shows tray icons only with the *AppIndicator and KStatusNotifierItem Support*
   extension; KDE and most other desktops show them natively.
+- Linux uses a theme-named symbolic icon while disabled, allowing the StatusNotifier host to
+  render it in the desktop's foreground color; the enabled state stays green. Theme-aware
+  rendering depends on the desktop's StatusNotifier host and icon-theme support.
 - macOS: the off-state icon is a **template image** (the menu bar recolours it for
   light/dark). Template images are always monochrome, so the green "on" icon is set as a
   normal image.

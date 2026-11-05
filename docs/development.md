@@ -42,7 +42,7 @@ sudo dnf install gtk4-devel libadwaita-devel blueprint-compiler glib2-devel
 # Debian / Ubuntu
 sudo apt install libgtk-4-dev libadwaita-1-dev blueprint-compiler libglib2.0-dev-bin
 
-./dev-install.sh   # once, and again if the repo moves
+./dev-install.sh   # once; rerun if the repo moves or installed tray assets change
 cargo run
 ```
 
@@ -55,12 +55,18 @@ installs the *Send with AirEcho* right-click entries: a Nautilus extension in
 `~/.local/share/kio/servicemenus/`, a Nemo action in `~/.local/share/nemo/actions/`,
 and a Thunar custom action merged into `~/.config/Thunar/uca.xml`. Restart each file
 manager after installation; KDE's service-menu cache is refreshed when available.
-The Thunar installer preserves the other custom actions in `uca.xml`.
+The Thunar installer preserves the other custom actions in `uca.xml`. In a running Linux
+build, the header menu can also install an integration for one selected file manager; this
+is useful for packaged builds that do not include the development script. For Flatpak
+Dolphin, it installs into that app's private data directory and uses `flatpak-spawn` to run
+AirEcho on the host.
 
 Optional:
 
 - **Tray icon on GNOME Shell:** install the *AppIndicator and KStatusNotifierItem Support*
-  extension. KDE and most other desktops show tray icons without it.
+  extension. KDE and most other desktops show tray icons without it. The inactive Linux icon
+  uses a symbolic icon theme name; the desktop host must support themed symbolic icons for it
+  to follow the panel's foreground color.
 - **`wl-clipboard`** (Wayland): AirEcho uses `wl-copy` to put received text on the
   clipboard, which can work while AirEcho's window is hidden. Without it, AirEcho falls back
   to GTK's clipboard, which some compositors ignore for unfocused apps.
@@ -102,6 +108,11 @@ cargo build
 ./dev-install.sh   # once: creates "~/Applications/AirEcho.app"
 cargo run
 ```
+
+The bundle declares Finder's *Send with AirEcho* Service in its `Info.plist`. The installer
+registers it with Launch Services and refreshes the Services database, so Finder can show the
+action after setup; check System Settings → Keyboard → Keyboard Shortcuts → Services → Files
+and Folders if it is hidden.
 
 On macOS, `cargo run` doesn't start `target/debug/airecho` directly. The runner in
 `.cargo/config.toml` calls `scripts/macos-app.sh`, which on every run:

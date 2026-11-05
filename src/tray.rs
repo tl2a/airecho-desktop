@@ -4,8 +4,8 @@
 //! `app.activate_action(id)` on the GTK main thread. The actions themselves are
 //! registered in `main.rs`, which keeps all application logic in one place.
 
-use adw::prelude::*;
 use adw::Application;
+use adw::prelude::*;
 use gtk4::{gio, glib};
 use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
@@ -71,14 +71,40 @@ impl Tray {
     }
 
     fn set_icon(&self, enabled: bool) {
-        if let Err(err) = self.icon.set_icon(Some(tray_icon_image(enabled))) {
+        #[cfg(not(target_os = "linux"))]
+        let image = Some(tray_icon_image(enabled));
+        #[cfg(target_os = "linux")]
+        let result = if enabled {
+            self.icon.set_icon(Some(tray_icon_image(true)))
+        } else {
+            self.icon
+                .set_native_icon(Some(tray_icon::NativeIcon::from_name(
+                    "airecho-status-inactive-symbolic",
+                )))
+        };
+        // macOS: the inactive icon is a template image (only its alpha is used), so the
+        // menu bar recolours it black or white to match the wallpaper / appearance.
+        // The active icon stays as drawn so it keeps its green.
+        #[cfg(target_os = "macos")]
+        let result = if enabled {
+            self.icon.set_icon(image)
+        } else {
+            self.icon.set_icon_templated(image)
+        };
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+        let result = self.icon.set_icon(image);
+        if let Err(err) = result {
             eprintln!("Failed to update tray icon: {err}");
         }
     }
 }
 
 fn enabled_menu_label(enabled: bool) -> &'static str {
-    if enabled { "Disable AirEcho" } else { "Enable AirEcho" }
+    if enabled {
+        "Disable AirEcho"
+    } else {
+        "Enable AirEcho"
+    }
 }
 
 /// Route tray menu clicks to `app.*` actions. Call once, at startup.
@@ -97,17 +123,13 @@ pub fn install_menu_handler() {
     }));
 }
 
-fn tray_icon_image(enabled: bool) -> Icon {
+fn tray_icon_image(_enabled: bool) -> Icon {
     use gtk4::gdk::prelude::*;
 
     #[cfg(target_os = "linux")]
-    let name = if enabled {
-        "in.tl2a.airEcho-status-icon-active-16.png"
-    } else {
-        "in.tl2a.airEcho-status-icon-inactive-16.png"
-    };
+    let name = "in.tl2a.airEcho-status-icon-active-16.png";
     #[cfg(not(target_os = "linux"))]
-    let name = if enabled {
+    let name = if _enabled {
         "in.tl2a.airEcho-status-icon-active.svg"
     } else {
         "in.tl2a.airEcho-status-icon-inactive.svg"
