@@ -109,6 +109,11 @@ cargo build
 cargo run
 ```
 
+The bundle declares Finder's *Send with AirEcho* Service in its `Info.plist`. The installer
+registers it with Launch Services and refreshes the Services database, so Finder can show the
+action after setup; check System Settings → Keyboard → Keyboard Shortcuts → Services → Files
+and Folders if it is hidden.
+
 On macOS, `cargo run` doesn't start `target/debug/airecho` directly. The runner in
 `.cargo/config.toml` calls `scripts/macos-app.sh`, which on every run:
 

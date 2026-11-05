@@ -44,6 +44,10 @@ usual install folders (`receiver::find_croc`). The release notes say so.
 - **Ad-hoc signed, not notarized** (that needs a paid Apple Developer account). Downloaded
   copies are quarantined: users confirm the first launch in *System Settings → Privacy &
   Security → Open Anyway*. Notifications work (ad-hoc signing is enough).
+- Finder's *Send with AirEcho* Service and *Open With → AirEcho* are declared in the app
+  bundle's `Info.plist`. Launch Services registers the app on first launch; if the Service
+  does not appear afterward, check System Settings → Keyboard → Keyboard Shortcuts → Services
+  → Files and Folders.
 - **Minimum macOS** = the build machine's major version (`LSMinimumSystemVersion` is set
   from `sw_vers`): Homebrew bottles and MacPorts builds target the OS they're built on. On
   the `macos-15` runners that's macOS 15.
