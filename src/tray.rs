@@ -71,7 +71,19 @@ impl Tray {
     }
 
     fn set_icon(&self, enabled: bool) {
-        if let Err(err) = self.icon.set_icon(Some(tray_icon_image(enabled))) {
+        let image = Some(tray_icon_image(enabled));
+        // macOS: the inactive icon is a template image (only its alpha is used), so the
+        // menu bar recolours it black or white to match the wallpaper / appearance.
+        // The active icon stays as drawn so it keeps its green.
+        #[cfg(target_os = "macos")]
+        let result = if enabled {
+            self.icon.set_icon(image)
+        } else {
+            self.icon.set_icon_templated(image)
+        };
+        #[cfg(not(target_os = "macos"))]
+        let result = self.icon.set_icon(image);
+        if let Err(err) = result {
             eprintln!("Failed to update tray icon: {err}");
         }
     }
