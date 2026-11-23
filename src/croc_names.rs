@@ -340,6 +340,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn stages_only_what_needs_it() {
         let base = std::env::temp_dir().join(format!("airecho-names-{}", std::process::id()));
         let _ = fs::remove_dir_all(&base);

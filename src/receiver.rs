@@ -706,6 +706,7 @@ fn list_dir(dir: &Path) -> HashSet<String> {
 pub(crate) fn find_croc() -> Option<PathBuf> {
     let home = dirs_next::home_dir().unwrap_or_default();
     let path = std::env::var_os("PATH").unwrap_or_else(OsString::new);
+    let executable = if cfg!(windows) { "croc.exe" } else { "croc" };
     std::env::split_paths(&path)
         .chain([
             PathBuf::from("/usr/local/bin"),
@@ -715,7 +716,7 @@ pub(crate) fn find_croc() -> Option<PathBuf> {
             home.join(".local/bin"),
             home.join("go/bin"),
         ])
-        .map(|dir| dir.join("croc"))
+        .map(|dir| dir.join(executable))
         .find(|candidate| candidate.is_file())
 }
 

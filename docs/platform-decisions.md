@@ -15,6 +15,7 @@ holds.
   - [Watching copied text](#watching-copied-text)
   - [Sending files from the file manager](#sending-files-from-the-file-manager)
 - [macOS: GTK libraries](#macos-gtk-libraries)
+- [Windows](#windows)
 - [Open questions](#open-questions)
 
 ## UI toolkit and crate versions
@@ -197,6 +198,18 @@ MacPorts, two GLib copies end up in one process and GTK crashes at startup (`typ
 **Decision.** The development setup uses **MacPorts only** for the GTK stack. Don't put
 Homebrew's `pkgconfig` folders in `PKG_CONFIG_PATH`; verify with `otool -L`. See
 [development.md](development.md#macos-one-glib-only).
+
+## Windows
+
+**Build.** x86_64 uses MSYS2 UCRT64 GTK 4 and libadwaita packages with Rust's
+`x86_64-pc-windows-gnu` target. ARM64 builds run on a native Windows ARM runner with the
+MSYS2 CLANGARM64 packages and Rust's `aarch64-pc-windows-gnullvm` target.
+`build.rs` searches Windows `PATH` entries, handles `.exe` tools, and runs MSYS2's
+Python-based `blueprint-compiler` with UTF-8 input enabled. `croc.exe` must also be on
+`PATH` when AirEcho runs. The tray uses `tray-icon`'s native Windows backend.
+
+The x86_64 Windows build is verified locally; ARM64 is built by CI. Neither release asset
+is a standalone installer or bundles GTK's runtime libraries.
 
 ## Release packaging
 

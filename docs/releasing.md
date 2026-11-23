@@ -8,13 +8,15 @@ Release binaries are built by [`.github/workflows/release.yml`](../.github/workf
 | macOS, Intel | `AirEcho_Desktop-<version>-x86_64.dmg` | `macos-15-intel` | MacPorts, `gtk4 +quartz` |
 | Linux, ARM | `AirEcho_Desktop-<version>-aarch64.AppImage` | `ubuntu-24.04-arm`, `ubuntu:26.04` container | Ubuntu 26.04 |
 | Linux, x86_64 | `AirEcho_Desktop-<version>-x86_64.AppImage` | `ubuntu-24.04`, `ubuntu:26.04` container | Ubuntu 26.04 |
+| Windows, x86_64 | `AirEcho_Desktop-<version>-x86_64.exe` | `windows-2022` | MSYS2 UCRT64 |
+| Windows, ARM64 | `AirEcho_Desktop-<version>-arm64.exe` | `windows-11-arm` | MSYS2 CLANGARM64 |
 
 ## How to release
 
 1. Bump `version` in `Cargo.toml` (and `meson.build`) in your pull request.
 2. Merge it into `main`.
 
-Every push to `main` builds all four. The release `v<version>` is created only if it
+Every push to `main` builds all six. The release `v<version>` is created only if it
 doesn't exist yet. The binaries go in with a `SHA256SUMS` file, the notes from
 [`.github/release-notes.md`](../.github/release-notes.md) and GitHub's generated
 changelog. Merging without a version bump still builds everything (to catch packaging
@@ -25,6 +27,17 @@ started by hand (*Actions → Release → Run workflow*).
 
 **croc is not bundled.** Users install it themselves; AirEcho finds it on `PATH` and in the
 usual install folders (`receiver::find_croc`). The release notes say so.
+
+### Windows `.exe`
+
+- x86_64 is built for `x86_64-pc-windows-gnu` with GTK 4 and libadwaita from MSYS2 UCRT64.
+- ARM64 is built on a native ARM runner for `aarch64-pc-windows-gnullvm` with GTK 4 and
+  libadwaita from MSYS2 CLANGARM64.
+- The release asset is the executable only, not a standalone installer. Running it requires
+  the matching MSYS2 runtime DLLs on `PATH` (UCRT64 for x86_64, CLANGARM64 for ARM64);
+  `croc.exe` must also be installed separately.
+- Both Windows jobs upload their executable as a workflow artifact on every run and include
+  it in new GitHub releases.
 
 ### macOS `.dmg` — `scripts/build-macos-dmg.sh`
 
@@ -85,6 +98,12 @@ usual install folders (`receiver::find_croc`). The release notes say so.
 ```sh
 # macOS (Homebrew or MacPorts GTK stack + dylibbundler, see the script header)
 scripts/build-macos-dmg.sh                    # → dist/AirEcho_Desktop-<version>-<arch>.dmg
+
+# Windows x86_64 (MSYS2 UCRT64 GTK stack + GNU Rust target)
+cargo build --release --target x86_64-pc-windows-gnu
+
+# Windows ARM64 (MSYS2 CLANGARM64 GTK stack + GNU-LLVM Rust target)
+cargo build --release --target aarch64-pc-windows-gnullvm
 
 # Linux AppImage, in Docker (any host OS; the image's architecture is the AppImage's)
 docker run --rm -v "$PWD":/src -w /src -e CARGO_TARGET_DIR=/src/target/linux \
