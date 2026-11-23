@@ -137,9 +137,15 @@ fn find_blueprint_compiler() -> (PathBuf, Option<PathBuf>) {
 
     #[cfg(windows)]
     if let Ok(script) = which_script("blueprint-compiler") {
-        let python = which_simple("python3")
-            .or_else(|_| which_simple("python"))
-            .unwrap_or_else(|_| panic!("Cannot find Python to run `blueprint-compiler`"));
+        let bundled_python = script.parent().and_then(|dir| {
+            [dir.join("python3.exe"), dir.join("python.exe")]
+                .into_iter()
+                .find(|path| path.is_file())
+        });
+        let python = bundled_python
+            .or_else(|| which_python("python3").ok())
+            .or_else(|| which_python("python").ok())
+            .unwrap_or_else(|| panic!("Cannot find Python to run `blueprint-compiler`"));
         return (python, Some(script));
     }
 
@@ -184,6 +190,27 @@ fn which_simple(name: &str) -> Result<PathBuf, ()> {
     };
     for dir in env::split_paths(&path_var) {
         let candidate = dir.join(&executable);
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+    Err(())
+}
+
+#[cfg(windows)]
+fn which_python(name: &str) -> Result<PathBuf, ()> {
+    let path_var = env::var_os("PATH").unwrap_or_default();
+    for dir in env::split_paths(&path_var) {
+        if dir
+            .file_name()
+            .and_then(|part| part.to_str())
+            .map(|part| part.eq_ignore_ascii_case("WindowsApps"))
+            .unwrap_or(false)
+        {
+            continue;
+        }
+
+        let candidate = dir.join(format!("{name}.exe"));
         if candidate.is_file() {
             return Ok(candidate);
         }
