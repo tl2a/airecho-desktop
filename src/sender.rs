@@ -264,6 +264,7 @@ fn run_send(
         eprintln!("[croc-send] run: {} ({mode:?}, code: {} chars)", job.describe(), code.chars().count());
     }
 
+    crate::process::hide_console(&mut cmd);
     let mut child = match cmd.spawn() {
         Ok(child) => child,
         Err(err) => return SendOutcome::Failed(format!("failed to run croc: {err}")),

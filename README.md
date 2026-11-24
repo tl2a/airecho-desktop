@@ -10,8 +10,9 @@ every time. Leave it running in the system tray: copy text on one machine and pa
 the other; right-click files and choose *Send with AirEcho*. Received files land in
 `~/Downloads/AirEcho`, received text goes straight to your clipboard.
 
-It is a GNOME-style app (GTK 4 + libadwaita, written in Rust) that runs on **Linux** and
-**macOS**.
+It is a GNOME-style app (GTK 4 + libadwaita, written in Rust) for **Linux** and **macOS**;
+it can also be built natively on **Windows** from source. Windows installers bundle the
+GTK runtime and add *Send with AirEcho* to File Explorer.
 
 <p align="center">
   <img src="docs/assets/app.png" alt="AirEcho running on the Home tab" width="600">
@@ -27,8 +28,9 @@ It is a GNOME-style app (GTK 4 + libadwaita, written in Rust) that runs on **Lin
 - **Sends what you copy.** Copy text anywhere and AirEcho sends it (switch off in Advanced →
   *Send Copied Text*). Copies that password managers mark as private are never sent.
 - **Sends files** from the right-click menu: Finder → *Send with AirEcho* (Services /
-  Quick Actions) or *Open With → AirEcho*; on Linux, use the installed file-manager action.
-  Advanced → *Send Files…* is also available.
+  Quick Actions) or *Open With → AirEcho*; on Linux, use the installed file-manager action;
+  on Windows, use File Explorer → *Send with AirEcho*. Advanced → *Send Files…* is also
+  available.
 - **Lives in the tray / menu bar.** Closing the window hides it; the tray icon turns
   green while AirEcho is on. Tray menu: *Enable AirEcho* / *Disable AirEcho*,
   *Settings*, *Quit*.
@@ -81,23 +83,25 @@ copied text replaces older text that is still waiting. Details:
 
 Ready-made builds are on the [Releases](https://github.com/tl2a/kopico-desktop/releases)
 page: a `.dmg` for macOS 15+ (Apple Silicon and Intel) and an `.AppImage` for Linux
-(ARM and x86_64; needs glibc 2.43+, e.g. Ubuntu 26.04 / Fedora 44). Install
+(ARM and x86_64; needs glibc 2.43+, e.g. Ubuntu 26.04 / Fedora 44). Windows x86_64 and
+ARM64 installers are also published; they bundle GTK and register the File Explorer
+context-menu action for the current user. Install
 [croc](https://github.com/schollz/croc) as well — AirEcho doesn't include it. The macOS app
 isn't notarized: allow it once in *System Settings → Privacy & Security*. Details and how
 releases are made: [docs/releasing.md](docs/releasing.md).
 
 ## Requirements (building)
 
-| | Linux | macOS |
-|---|---|---|
-| Rust (2024 edition) | ✓ | ✓ |
-| GTK ≥ 4.22, libadwaita ≥ 1.9 | distro packages (GNOME 50 era) | MacPorts |
-| `blueprint-compiler`, `glib-compile-resources`, `pkg-config` | ✓ | MacPorts |
-| [croc](https://github.com/schollz/croc) on `PATH` (or in `/usr/local/bin`, `/opt/homebrew/bin`, `/opt/local/bin`, `~/.local/bin`, `~/go/bin`) | ✓ | ✓ |
-| Adwaita icon theme | usually installed | `sudo port install adwaita-icon-theme` |
-| Tray icon on GNOME Shell | *AppIndicator and KStatusNotifierItem Support* extension | — |
-| `wl-clipboard` (optional, Wayland) | lets AirEcho set the clipboard while unfocused | — |
-| `nautilus-python` (optional) | *Send with AirEcho* in GNOME Files | — |
+| | Linux | macOS | Windows |
+|---|---|---|---|
+| Rust (2024 edition) | ✓ | ✓ | GNU / GNU-LLVM targets |
+| GTK ≥ 4.22, libadwaita ≥ 1.9 | distro packages (GNOME 50 era) | MacPorts | MSYS2 UCRT64 / CLANGARM64 |
+| `blueprint-compiler`, `glib-compile-resources`, `pkg-config` | ✓ | MacPorts | MSYS2 UCRT64 / CLANGARM64 |
+| [croc](https://github.com/schollz/croc) on `PATH` (or in `/usr/local/bin`, `/opt/homebrew/bin`, `/opt/local/bin`, `~/.local/bin`, `~/go/bin`) | ✓ | ✓ | `croc.exe` |
+| Adwaita icon theme | usually installed | `sudo port install adwaita-icon-theme` | MSYS2 UCRT64 / CLANGARM64 |
+| Tray icon on GNOME Shell | *AppIndicator and KStatusNotifierItem Support* extension | — | — |
+| `wl-clipboard` (optional, Wayland) | lets AirEcho set the clipboard while unfocused | — | — |
+| `nautilus-python` (optional) | *Send with AirEcho* in GNOME Files | — | — |
 
 The GTK/libadwaita minimums come from the crate feature flags (`gnome_50`, `v1_9`), which
 are checked at build time. Check yours with
@@ -129,6 +133,56 @@ cargo run             # runs AirEcho from that app bundle (notifications, Finder
 
 On the first start macOS asks to allow notifications; AirEcho then appears in
 System Settings → Notifications.
+
+### Windows
+
+Install MSYS2 and use its **UCRT64** environment for x86_64 builds. Install the native GTK
+build tools and libraries from an MSYS2 UCRT64 terminal:
+
+```sh
+pacman -Syu
+pacman -S --needed mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-gtk4 \
+  mingw-w64-ucrt-x86_64-libadwaita mingw-w64-ucrt-x86_64-blueprint-compiler \
+  mingw-w64-ucrt-x86_64-glib2 mingw-w64-ucrt-x86_64-pkgconf \
+  mingw-w64-ucrt-x86_64-adwaita-icon-theme
+```
+
+Use the `x86_64-pc-windows-gnu` Rust target. In PowerShell, set the MSYS2 UCRT64 paths
+(adjust `$msys` if MSYS2 is installed elsewhere), then build:
+
+```powershell
+$msys = "$env:LOCALAPPDATA\msys64\ucrt64"
+$env:PATH = "$msys\bin;$env:PATH"
+$env:PKG_CONFIG_PATH = "$msys\lib\pkgconfig;$msys\share\pkgconfig"
+$env:CC = "$msys\bin\gcc.exe"
+$env:AR = "$msys\bin\ar.exe"
+cargo build
+```
+
+To keep these settings for future PowerShell windows, run this once (adjust `$msys` if
+MSYS2 is installed elsewhere):
+
+```powershell
+$msys = "$env:LOCALAPPDATA\msys64\ucrt64"
+$bin = "$msys\bin"
+$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+$entries = @($userPath -split ";" | Where-Object { $_ })
+if ($entries -notcontains $bin) {
+    $entries += $bin
+    [Environment]::SetEnvironmentVariable("Path", ($entries -join ";"), "User")
+}
+[Environment]::SetEnvironmentVariable("PKG_CONFIG_PATH", "$msys\lib\pkgconfig;$msys\share\pkgconfig", "User")
+[Environment]::SetEnvironmentVariable("CC", "$bin\gcc.exe", "User")
+[Environment]::SetEnvironmentVariable("AR", "$bin\ar.exe", "User")
+```
+
+Open a new PowerShell window for the changes to take effect. Keep UCRT64 `bin` on `PATH`
+when running the x86_64 build so GTK's DLLs can be loaded. Install `croc.exe` separately
+and add its folder to `PATH` for sending and receiving.
+
+For a native ARM64 build, use a Windows ARM64 machine or runner with MSYS2's **CLANGARM64**
+environment and the matching `mingw-w64-clang-aarch64-*` GTK packages. Build with the
+`aarch64-pc-windows-gnullvm` Rust target. The CI release workflow builds both architectures.
 
 ### Meson (install / packaging)
 

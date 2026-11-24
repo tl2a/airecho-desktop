@@ -15,6 +15,7 @@ holds.
   - [Watching copied text](#watching-copied-text)
   - [Sending files from the file manager](#sending-files-from-the-file-manager)
 - [macOS: GTK libraries](#macos-gtk-libraries)
+- [Windows](#windows)
 - [Open questions](#open-questions)
 
 ## UI toolkit and crate versions
@@ -198,6 +199,20 @@ MacPorts, two GLib copies end up in one process and GTK crashes at startup (`typ
 Homebrew's `pkgconfig` folders in `PKG_CONFIG_PATH`; verify with `otool -L`. See
 [development.md](development.md#macos-one-glib-only).
 
+## Windows
+
+**Build.** x86_64 uses MSYS2 UCRT64 GTK 4 and libadwaita packages with Rust's
+`x86_64-pc-windows-gnu` target. ARM64 builds run on a native Windows ARM runner with the
+MSYS2 CLANGARM64 packages and Rust's `aarch64-pc-windows-gnullvm` target.
+`build.rs` searches Windows `PATH` entries, handles `.exe` tools, and runs MSYS2's
+Python-based `blueprint-compiler` with UTF-8 input enabled. `croc.exe` must also be on
+`PATH` when AirEcho runs. The tray uses `tray-icon`'s native Windows backend.
+
+The x86_64 Windows build is verified locally; ARM64 is built by CI. Release installers
+bundle GTK's runtime DLLs and data, install per-user, and add an Explorer static verb for
+files and folders. `croc.exe` remains external. On Windows 11 the static verb may appear
+under *Show more options*.
+
 ## Release packaging
 
 Details: [releasing.md](releasing.md).
@@ -208,7 +223,8 @@ Details: [releasing.md](releasing.md).
   source, because Homebrew has no Intel GTK bottles and MacPorts' binaries are `+x11`.
   The `.dmg` needs the macOS version it was built on (15).
 - **Self-contained bundles, croc excluded.** GTK, libadwaita and their data ship inside
-  the `.app` / AppImage. croc stays a requirement users install themselves.
+  the `.app`, AppImage, and Windows installers. croc stays a requirement users install
+  themselves.
 - **macOS:** libraries referenced via `@rpath` (fits every library's header);
   `src/macos_bundle.rs` points GTK at the bundled data. Ad-hoc signed, not notarized.
 - **Linux:** `linuxdeploy-plugin-gtk`'s forced `GDK_BACKEND=x11` and

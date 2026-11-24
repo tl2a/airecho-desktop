@@ -1,3 +1,5 @@
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -14,12 +16,15 @@ mod croc_names;
 #[cfg(target_os = "linux")]
 mod file_manager;
 mod notification;
+mod process;
 mod receiver;
 mod sender;
 mod tray;
 mod transfers;
 #[cfg(target_os = "macos")]
 mod macos_bundle;
+#[cfg(target_os = "windows")]
+mod windows_bundle;
 #[cfg(target_os = "macos")]
 mod macos_services;
 
@@ -60,6 +65,8 @@ fn main() -> gtk4::glib::ExitCode {
 
     #[cfg(target_os = "macos")]
     macos_bundle::setup_environment();
+    #[cfg(target_os = "windows")]
+    windows_bundle::setup_environment();
 
     let bytes = include_bytes!(env!("GRESOURCE_FILE"));
     let resource = gio::Resource::from_data(&gtk4::glib::Bytes::from_static(bytes))
@@ -250,6 +257,11 @@ fn show_toast_on_window(window: &ApplicationWindow, message: &str) {
 
 /// Runs once per process on the primary instance: registers actions, tray, receiver.
 fn setup_app(app: &Application, transfers: &Transfers) {
+    if let Some(display) = gtk4::gdk::Display::default() {
+        gtk4::IconTheme::for_display(&display)
+            .add_resource_path("/in/tl2a/airEcho/icons/hicolor");
+    }
+
     let tray: Rc<RefCell<Option<Tray>>> = Rc::new(RefCell::new(None));
     tray::install_menu_handler();
     notification::init(); // macOS: permission prompt on first run
@@ -613,12 +625,6 @@ fn build_ui(app: &Application) -> ApplicationWindow {
 }
 
 fn show_about_dialog(parent: &impl IsA<gtk4::Widget>) {
-    #[cfg(target_os = "macos")]
-    if let Some(display) = gtk4::gdk::Display::default() {
-        gtk4::IconTheme::for_display(&display)
-            .add_resource_path("/in/tl2a/airEcho/icons/hicolor");
-    }
-
     let dialog = AboutDialog::new();
     dialog.set_application_name("AirEcho");
     dialog.set_application_icon(APP_ID);

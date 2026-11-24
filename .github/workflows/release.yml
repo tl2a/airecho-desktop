@@ -1,7 +1,7 @@
-# Builds AirEcho for macOS (.dmg) and Linux (.AppImage), each for arm64 and x86_64,
-# and publishes them as a GitHub release — see docs/releasing.md.
+# Builds AirEcho for macOS (.dmg), Linux (.AppImage), and Windows (.exe), and publishes
+# them as a GitHub release — see docs/releasing.md.
 #
-# Every push to main (= every merged pull request) builds all four. A release is created
+# Every push to main (= every merged pull request) builds all six. A release is created
 # only for a version that has none yet: bump `version` in Cargo.toml to release.
 # Otherwise the binaries are still downloadable from the run's artifacts.
 
@@ -156,9 +156,165 @@ jobs:
           path: dist/*.dmg
           if-no-files-found: error
 
+  windows:
+    name: Windows x86_64 (installer)
+    needs: version
+    runs-on: windows-2022
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          location: C:\msys64
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-libadwaita
+            mingw-w64-ucrt-x86_64-blueprint-compiler
+            mingw-w64-ucrt-x86_64-glib2
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-adwaita-icon-theme
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: windows-x86_64-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: windows-x86_64-cargo-
+
+      - name: Build and package Windows installer
+        shell: pwsh
+        env:
+          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
+          PKG_CONFIG_ALLOW_CROSS: "1"
+        run: |
+          $msys = Join-Path $env:MSYS2_LOCATION "ucrt64"
+          $env:PATH = "$msys\bin;$env:PATH"
+          $env:PKG_CONFIG_PATH = "$msys\lib\pkgconfig;$msys\share\pkgconfig"
+          $env:PKG_CONFIG = "$msys\bin\pkg-config.exe"
+          $env:CC = "$msys\bin\gcc.exe"
+          $env:AR = "$msys\bin\ar.exe"
+          cargo build --release --target x86_64-pc-windows-gnu
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          choco install innosetup --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $bundle = Join-Path $PWD "target\windows-bundle-x86_64"
+          & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\package-windows.ps1 `
+            -Msys2Root $env:MSYS2_LOCATION `
+            -Environment ucrt64 `
+            -Executable "target\x86_64-pc-windows-gnu\release\airecho.exe" `
+            -OutputDirectory $bundle
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          New-Item -ItemType Directory -Force dist | Out-Null
+          $iscc = Join-Path ([Environment]::GetFolderPath("ProgramFilesX86")) "Inno Setup 6\ISCC.exe"
+          $output = Join-Path $PWD "dist"
+          & $iscc "/DAppVersion=$env:VERSION" "/DAppArch=x86_64" "/DBundleDir=$bundle" `
+            "/DOutputDir=$output" scripts\windows-installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-x86_64-installer
+          path: dist/*-setup.exe
+          if-no-files-found: error
+
+  windows-arm64:
+    name: Windows ARM64 (installer)
+    needs: version
+    runs-on: windows-11-arm
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          location: C:\msys64
+          msystem: CLANGARM64
+          update: true
+          install: >-
+            mingw-w64-clang-aarch64-clang
+            mingw-w64-clang-aarch64-lld
+            mingw-w64-clang-aarch64-llvm
+            mingw-w64-clang-aarch64-libunwind
+            mingw-w64-clang-aarch64-gtk4
+            mingw-w64-clang-aarch64-libadwaita
+            mingw-w64-clang-aarch64-blueprint-compiler
+            mingw-w64-clang-aarch64-glib2
+            mingw-w64-clang-aarch64-pkgconf
+            mingw-w64-clang-aarch64-adwaita-icon-theme
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-pc-windows-gnullvm
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: windows-arm64-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: windows-arm64-cargo-
+
+      - name: Build and package Windows ARM64 installer
+        shell: pwsh
+        env:
+          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
+          PKG_CONFIG_ALLOW_CROSS: "1"
+        run: |
+          $msys = Join-Path $env:MSYS2_LOCATION "clangarm64"
+          $env:PATH = "$msys\bin;$env:PATH"
+          $env:PKG_CONFIG_PATH = "$msys\lib\pkgconfig;$msys\share\pkgconfig"
+          $env:PKG_CONFIG = "$msys\bin\pkg-config.exe"
+          $env:CC = "$msys\bin\clang.exe"
+          $env:AR = "$msys\bin\llvm-ar.exe"
+          $env:CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_LINKER = "$msys\bin\clang.exe"
+          cargo build --release --target aarch64-pc-windows-gnullvm
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          choco install innosetup --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $bundle = Join-Path $PWD "target\windows-bundle-arm64"
+          & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\package-windows.ps1 `
+            -Msys2Root $env:MSYS2_LOCATION `
+            -Environment clangarm64 `
+            -Executable "target\aarch64-pc-windows-gnullvm\release\airecho.exe" `
+            -OutputDirectory $bundle
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          New-Item -ItemType Directory -Force dist | Out-Null
+          $iscc = Join-Path ([Environment]::GetFolderPath("ProgramFilesX86")) "Inno Setup 6\ISCC.exe"
+          $output = Join-Path $PWD "dist"
+          & $iscc "/DAppVersion=$env:VERSION" "/DAppArch=arm64" "/DBundleDir=$bundle" `
+            "/DOutputDir=$output" scripts\windows-installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-arm64-installer
+          path: dist/*-setup.exe
+          if-no-files-found: error
+
   release:
     name: Publish release
-    needs: [version, linux, macos]
+    needs: [version, linux, macos, windows, windows-arm64]
     if: needs.version.outputs.released == 'false'
     runs-on: ubuntu-latest
     permissions:
