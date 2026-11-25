@@ -26,6 +26,7 @@ fn main() {
 
     if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         let png_icon = manifest_dir.join("data/macos/about-icon.png");
+        println!("cargo:rerun-if-changed={}", png_icon.display());
         let png = fs::read(&png_icon).expect("failed to read application icon");
         let png_len = u32::try_from(png.len()).expect("application icon is too large");
         let icon = out_dir.join("airecho.ico");
@@ -43,9 +44,27 @@ fn main() {
             format!("#define IDI_ICON1 101\nIDI_ICON1 ICON \"{icon_path}\"\n"),
         )
         .expect("failed to write Windows icon resource script");
-        embed_resource::compile(&resource_script, embed_resource::NONE)
-            .manifest_optional()
-            .expect("failed to embed Windows application icon");
+        println!("cargo:rerun-if-changed={}", resource_script.display());
+
+        if env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("gnu") {
+            let resource_object = out_dir.join("airecho-res.o");
+            let status = Command::new("windres")
+                .args(["--target=pe-x86-64", "-i"])
+                .arg(&resource_script)
+                .arg("-o")
+                .arg(&resource_object)
+                .status()
+                .expect("failed to run windres for Windows application icon");
+            assert!(
+                status.success(),
+                "windres failed to compile Windows application icon"
+            );
+            println!("cargo:rustc-link-arg={}", resource_object.display());
+        } else {
+            embed_resource::compile(&resource_script, embed_resource::NONE)
+                .manifest_optional()
+                .expect("failed to embed Windows application icon");
+        }
     }
 
     // ── Locate tools ──────────────────────────────────────────────────────────
