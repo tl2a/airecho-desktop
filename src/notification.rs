@@ -7,6 +7,8 @@
 //!   `preview-macos-un`) — GLib has no macOS notification backend. Requires running from
 //!   an `.app` bundle with AirEcho's bundle id; [`init`] asks for permission, which also
 //!   lists AirEcho in System Settings → Notifications. Clicking one does nothing yet.
+//! - **Windows:** the process and Start Menu shortcut share AirEcho's AppUserModelID, and
+//!   GIO notifications include the themed AirEcho icon.
 //!
 //! Texts are never put in a notification — they can appear on the lock screen.
 
@@ -54,6 +56,7 @@ pub fn send_files_received(app: &Application, message: &str) {
 fn send(app: &Application, id: &str, title: &str, body: &str) {
     let notification = gio::Notification::new(title);
     notification.set_body(Some(body));
+    notification.set_icon(&gio::ThemedIcon::new(crate::APP_ID));
     notification.set_default_action(&format!("app.{}", crate::tray::ACTION_SHOW_WINDOW));
     app.send_notification(Some(id), &notification);
 }

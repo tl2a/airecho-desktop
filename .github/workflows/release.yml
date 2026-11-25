@@ -157,7 +157,7 @@ jobs:
           if-no-files-found: error
 
   windows:
-    name: Windows x86_64 (.exe)
+    name: Windows x86_64 (installer)
     needs: version
     runs-on: windows-2022
     env:
@@ -193,7 +193,7 @@ jobs:
           key: windows-x86_64-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: windows-x86_64-cargo-
 
-      - name: Build Windows executable
+      - name: Build and package Windows installer
         shell: pwsh
         env:
           MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
@@ -208,18 +208,32 @@ jobs:
           cargo build --release --target x86_64-pc-windows-gnu
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+          choco install innosetup --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $bundle = Join-Path $PWD "target\windows-bundle-x86_64"
+          & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\package-windows.ps1 `
+            -Msys2Root $env:MSYS2_LOCATION `
+            -Environment ucrt64 `
+            -Executable "target\x86_64-pc-windows-gnu\release\airecho.exe" `
+            -OutputDirectory $bundle
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item target\x86_64-pc-windows-gnu\release\airecho.exe `
-            "dist\AirEcho_Desktop-$env:VERSION-x86_64.exe"
+          $iscc = Join-Path ([Environment]::GetFolderPath("ProgramFilesX86")) "Inno Setup 6\ISCC.exe"
+          $output = Join-Path $PWD "dist"
+          & $iscc "/DAppVersion=$env:VERSION" "/DAppArch=x86_64" "/DBundleDir=$bundle" `
+            "/DOutputDir=$output" scripts\windows-installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - uses: actions/upload-artifact@v7
         with:
-          name: windows-x86_64
-          path: dist/*.exe
+          name: windows-x86_64-installer
+          path: dist/*-setup.exe
           if-no-files-found: error
 
   windows-arm64:
-    name: Windows ARM64 (.exe)
+    name: Windows ARM64 (installer)
     needs: version
     runs-on: windows-11-arm
     env:
@@ -258,7 +272,7 @@ jobs:
           key: windows-arm64-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: windows-arm64-cargo-
 
-      - name: Build Windows ARM64 executable
+      - name: Build and package Windows ARM64 installer
         shell: pwsh
         env:
           MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
@@ -274,14 +288,28 @@ jobs:
           cargo build --release --target aarch64-pc-windows-gnullvm
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+          choco install innosetup --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $bundle = Join-Path $PWD "target\windows-bundle-arm64"
+          & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\package-windows.ps1 `
+            -Msys2Root $env:MSYS2_LOCATION `
+            -Environment clangarm64 `
+            -Executable "target\aarch64-pc-windows-gnullvm\release\airecho.exe" `
+            -OutputDirectory $bundle
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item target\aarch64-pc-windows-gnullvm\release\airecho.exe `
-            "dist\AirEcho_Desktop-$env:VERSION-arm64.exe"
+          $iscc = Join-Path ([Environment]::GetFolderPath("ProgramFilesX86")) "Inno Setup 6\ISCC.exe"
+          $output = Join-Path $PWD "dist"
+          & $iscc "/DAppVersion=$env:VERSION" "/DAppArch=arm64" "/DBundleDir=$bundle" `
+            "/DOutputDir=$output" scripts\windows-installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - uses: actions/upload-artifact@v7
         with:
-          name: windows-arm64
-          path: dist/*.exe
+          name: windows-arm64-installer
+          path: dist/*-setup.exe
           if-no-files-found: error
 
   release:

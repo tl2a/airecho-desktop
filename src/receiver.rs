@@ -401,6 +401,7 @@ fn run_croc_tracked(
             code.chars().count()
         );
     }
+    crate::process::hide_console(&mut cmd);
     let mut child = cmd.spawn()?;
 
     // Drain both pipes on their own threads so croc can never block on a full pipe.

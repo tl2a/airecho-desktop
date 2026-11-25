@@ -11,8 +11,8 @@ the other; right-click files and choose *Send with AirEcho*. Received files land
 `~/Downloads/AirEcho`, received text goes straight to your clipboard.
 
 It is a GNOME-style app (GTK 4 + libadwaita, written in Rust) for **Linux** and **macOS**;
-it can also be built natively on **Windows** from source. No Windows release package is
-published yet.
+it can also be built natively on **Windows** from source. Windows installers bundle the
+GTK runtime and add *Send with AirEcho* to File Explorer.
 
 <p align="center">
   <img src="docs/assets/app.png" alt="AirEcho running on the Home tab" width="600">
@@ -28,8 +28,9 @@ published yet.
 - **Sends what you copy.** Copy text anywhere and AirEcho sends it (switch off in Advanced →
   *Send Copied Text*). Copies that password managers mark as private are never sent.
 - **Sends files** from the right-click menu: Finder → *Send with AirEcho* (Services /
-  Quick Actions) or *Open With → AirEcho*; on Linux, use the installed file-manager action.
-  Advanced → *Send Files…* is also available.
+  Quick Actions) or *Open With → AirEcho*; on Linux, use the installed file-manager action;
+  on Windows, use File Explorer → *Send with AirEcho*. Advanced → *Send Files…* is also
+  available.
 - **Lives in the tray / menu bar.** Closing the window hides it; the tray icon turns
   green while AirEcho is on. Tray menu: *Enable AirEcho* / *Disable AirEcho*,
   *Settings*, *Quit*.
@@ -83,8 +84,8 @@ copied text replaces older text that is still waiting. Details:
 Ready-made builds are on the [Releases](https://github.com/tl2a/kopico-desktop/releases)
 page: a `.dmg` for macOS 15+ (Apple Silicon and Intel) and an `.AppImage` for Linux
 (ARM and x86_64; needs glibc 2.43+, e.g. Ubuntu 26.04 / Fedora 44). Windows x86_64 and
-ARM64 `.exe` builds are also published, but they are not standalone installers and require
-the matching MSYS2 runtime (UCRT64 or CLANGARM64). Install
+ARM64 installers are also published; they bundle GTK and register the File Explorer
+context-menu action for the current user. Install
 [croc](https://github.com/schollz/croc) as well — AirEcho doesn't include it. The macOS app
 isn't notarized: allow it once in *System Settings → Privacy & Security*. Details and how
 releases are made: [docs/releasing.md](docs/releasing.md).

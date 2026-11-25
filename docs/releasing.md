@@ -8,8 +8,8 @@ Release binaries are built by [`.github/workflows/release.yml`](../.github/workf
 | macOS, Intel | `AirEcho_Desktop-<version>-x86_64.dmg` | `macos-15-intel` | MacPorts, `gtk4 +quartz` |
 | Linux, ARM | `AirEcho_Desktop-<version>-aarch64.AppImage` | `ubuntu-24.04-arm`, `ubuntu:26.04` container | Ubuntu 26.04 |
 | Linux, x86_64 | `AirEcho_Desktop-<version>-x86_64.AppImage` | `ubuntu-24.04`, `ubuntu:26.04` container | Ubuntu 26.04 |
-| Windows, x86_64 | `AirEcho_Desktop-<version>-x86_64.exe` | `windows-2022` | MSYS2 UCRT64 |
-| Windows, ARM64 | `AirEcho_Desktop-<version>-arm64.exe` | `windows-11-arm` | MSYS2 CLANGARM64 |
+| Windows, x86_64 | `AirEcho_Desktop-<version>-x86_64-setup.exe` | `windows-2022` | MSYS2 UCRT64 |
+| Windows, ARM64 | `AirEcho_Desktop-<version>-arm64-setup.exe` | `windows-11-arm` | MSYS2 CLANGARM64 |
 
 ## How to release
 
@@ -28,15 +28,23 @@ started by hand (*Actions → Release → Run workflow*).
 **croc is not bundled.** Users install it themselves; AirEcho finds it on `PATH` and in the
 usual install folders (`receiver::find_croc`). The release notes say so.
 
-### Windows `.exe`
+### Windows installer
 
 - x86_64 is built for `x86_64-pc-windows-gnu` with GTK 4 and libadwaita from MSYS2 UCRT64.
 - ARM64 is built on a native ARM runner for `aarch64-pc-windows-gnullvm` with GTK 4 and
   libadwaita from MSYS2 CLANGARM64.
-- The release asset is the executable only, not a standalone installer. Running it requires
-  the matching MSYS2 runtime DLLs on `PATH` (UCRT64 for x86_64, CLANGARM64 for ARM64);
-  `croc.exe` must also be installed separately.
-- Both Windows jobs upload their executable as a workflow artifact on every run and include
+- `scripts/package-windows.ps1` copies the executable's transitive runtime DLLs, GTK's
+  runtime data, and the SVG image loader into a relocatable app directory. The Inno Setup
+  installer installs per-user without administrator privileges; users do not need MSYS2.
+- The installer registers *Send with AirEcho* for files and folders in the current user's
+  Explorer context menu and removes that registration on uninstall. On Windows 11 the
+  legacy static verb may be under *Show more options*.
+- Start Menu and desktop shortcuts carry the app's `AppUserModelID`, which Windows uses to
+  associate toast notifications with AirEcho and its executable icon.
+- Windows builds use the GUI subsystem and suppress console windows for background `croc`
+  processes.
+- `croc.exe` remains a separate prerequisite and is not bundled.
+- Both Windows jobs upload their installer as a workflow artifact on every run and include
   it in new GitHub releases.
 
 ### macOS `.dmg` — `scripts/build-macos-dmg.sh`
@@ -99,11 +107,21 @@ usual install folders (`receiver::find_croc`). The release notes say so.
 # macOS (Homebrew or MacPorts GTK stack + dylibbundler, see the script header)
 scripts/build-macos-dmg.sh                    # → dist/AirEcho_Desktop-<version>-<arch>.dmg
 
-# Windows x86_64 (MSYS2 UCRT64 GTK stack + GNU Rust target)
+# Windows x86_64 installer (MSYS2 UCRT64 GTK stack + GNU Rust target)
 cargo build --release --target x86_64-pc-windows-gnu
 
-# Windows ARM64 (MSYS2 CLANGARM64 GTK stack + GNU-LLVM Rust target)
+# Windows ARM64 installer (MSYS2 CLANGARM64 GTK stack + GNU-LLVM Rust target)
 cargo build --release --target aarch64-pc-windows-gnullvm
+
+# Package a built executable and compile the Inno Setup installer (run from PowerShell)
+scripts/package-windows.ps1 -Msys2Root "$env:LOCALAPPDATA\msys64" `
+    -Environment ucrt64 -Executable "target\x86_64-pc-windows-gnu\release\airecho.exe" `
+    -OutputDirectory "target\windows-bundle-x86_64"
+$output = Join-Path $PWD "dist"
+New-Item -ItemType Directory -Force $output | Out-Null
+ISCC.exe /DAppVersion=0.6.0 /DAppArch=x86_64 `
+    "/DBundleDir=$((Resolve-Path 'target\windows-bundle-x86_64').Path)" `
+    "/DOutputDir=$output" scripts\windows-installer.iss
 
 # Linux AppImage, in Docker (any host OS; the image's architecture is the AppImage's)
 docker run --rm -v "$PWD":/src -w /src -e CARGO_TARGET_DIR=/src/target/linux \

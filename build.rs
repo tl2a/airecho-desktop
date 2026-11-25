@@ -24,6 +24,30 @@ fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        let png_icon = manifest_dir.join("data/macos/about-icon.png");
+        let png = fs::read(&png_icon).expect("failed to read application icon");
+        let png_len = u32::try_from(png.len()).expect("application icon is too large");
+        let icon = out_dir.join("airecho.ico");
+        let mut ico = Vec::with_capacity(png.len() + 22);
+        ico.extend_from_slice(&[0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 32, 0]);
+        ico.extend_from_slice(&png_len.to_le_bytes());
+        ico.extend_from_slice(&22u32.to_le_bytes());
+        ico.extend_from_slice(&png);
+        fs::write(&icon, ico).expect("failed to write Windows application icon");
+
+        let resource_script = out_dir.join("airecho.rc");
+        let icon_path = icon.to_string_lossy().replace('\\', "/");
+        fs::write(
+            &resource_script,
+            format!("#define IDI_ICON1 101\nIDI_ICON1 ICON \"{icon_path}\"\n"),
+        )
+        .expect("failed to write Windows icon resource script");
+        embed_resource::compile(&resource_script, embed_resource::NONE)
+            .manifest_optional()
+            .expect("failed to embed Windows application icon");
+    }
+
     // ── Locate tools ──────────────────────────────────────────────────────────
     let (blueprint_compiler, blueprint_script) = find_blueprint_compiler();
     let glib_compile_resources = find_binary("glib-compile-resources");
