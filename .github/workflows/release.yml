@@ -203,8 +203,8 @@ jobs:
           $env:PATH = "$msys\bin;$env:PATH"
           $env:PKG_CONFIG_PATH = "$msys\lib\pkgconfig;$msys\share\pkgconfig"
           $env:PKG_CONFIG = "$msys\bin\pkg-config.exe"
-          $env:CC = "$msys\bin\gcc.exe"
-          $env:AR = "$msys\bin\ar.exe"
+          $env:CC_x86_64_pc_windows_gnu = "$msys\bin\gcc.exe"
+          $env:AR_x86_64_pc_windows_gnu = "$msys\bin\ar.exe"
           cargo build --release --target x86_64-pc-windows-gnu
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
