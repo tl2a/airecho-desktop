@@ -46,7 +46,9 @@ fn main() {
         .expect("failed to write Windows icon resource script");
         println!("cargo:rerun-if-changed={}", resource_script.display());
 
-        if env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("gnu") {
+        if env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("gnu")
+            && env::var("CARGO_CFG_TARGET_ARCH").as_deref() == Ok("x86_64")
+        {
             let resource_object = out_dir.join("airecho-res.o");
             let status = Command::new("windres")
                 .args(["--target=pe-x86-64", "-i"])
