@@ -1,5 +1,5 @@
-# Builds AirEcho for macOS (.dmg), Linux (.AppImage), and Windows (.exe), and publishes
-# them as a GitHub release — see docs/releasing.md.
+# Temporary hotfix validation: only Windows x86_64 is enabled. Other platform jobs and
+# release publishing are disabled until the x86_64 fix is confirmed.
 #
 # Every push to main (= every merged pull request) builds all six. A release is created
 # only for a version that has none yet: bump `version` in Cargo.toml to release.
@@ -9,7 +9,7 @@ name: Release
 
 on:
   push:
-    branches: [main]
+    branches: [main, v0.6.1-hotfix]
   workflow_dispatch:
 
 permissions:
@@ -43,6 +43,7 @@ jobs:
 
   linux:
     name: Linux ${{ matrix.arch }} (AppImage)
+    if: false # Temporarily disabled for Windows x86_64 hotfix validation.
     needs: version
     strategy:
       fail-fast: false
@@ -77,6 +78,7 @@ jobs:
 
   macos:
     name: macOS ${{ matrix.arch }} (dmg)
+    if: false # Temporarily disabled for Windows x86_64 hotfix validation.
     needs: version
     strategy:
       fail-fast: false
@@ -234,6 +236,7 @@ jobs:
 
   windows-arm64:
     name: Windows ARM64 (installer)
+    if: false # Temporarily disabled for Windows x86_64 hotfix validation.
     needs: version
     runs-on: windows-11-arm
     env:
@@ -314,8 +317,8 @@ jobs:
 
   release:
     name: Publish release
+    if: false # Do not publish a partial release during hotfix validation.
     needs: [version, linux, macos, windows, windows-arm64]
-    if: needs.version.outputs.released == 'false'
     runs-on: ubuntu-latest
     permissions:
       contents: write
