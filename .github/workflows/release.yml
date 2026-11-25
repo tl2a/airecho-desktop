@@ -1,15 +1,15 @@
-# Builds AirEcho for macOS (.dmg), Linux (.AppImage), and Windows (.exe), and publishes
-# them as a GitHub release — see docs/releasing.md.
+# Builds AirEcho for all platforms on main and publishes new versions. Hotfix branches
+# build all platforms by default; *-windows-hotfix, *-linux-hotfix, and *-macos-hotfix
+# build only the selected platform. Hotfix runs never publish releases.
 #
-# Every push to main (= every merged pull request) builds all six. A release is created
-# only for a version that has none yet: bump `version` in Cargo.toml to release.
-# Otherwise the binaries are still downloadable from the run's artifacts.
+# A release is created only for a version that has none yet: bump `version` in Cargo.toml
+# to release. Otherwise the binaries are still downloadable from the run's artifacts.
 
 name: Release
 
 on:
   push:
-    branches: [main]
+    branches: [main, '**/*-hotfix']
   workflow_dispatch:
 
 permissions:
@@ -43,6 +43,7 @@ jobs:
 
   linux:
     name: Linux ${{ matrix.arch }} (AppImage)
+    if: ${{ !endsWith(github.ref_name, '-windows-hotfix') && !endsWith(github.ref_name, '-macos-hotfix') }}
     needs: version
     strategy:
       fail-fast: false
@@ -77,6 +78,7 @@ jobs:
 
   macos:
     name: macOS ${{ matrix.arch }} (dmg)
+    if: ${{ !endsWith(github.ref_name, '-windows-hotfix') && !endsWith(github.ref_name, '-linux-hotfix') }}
     needs: version
     strategy:
       fail-fast: false
@@ -158,6 +160,7 @@ jobs:
 
   windows:
     name: Windows x86_64 (installer)
+    if: ${{ !endsWith(github.ref_name, '-linux-hotfix') && !endsWith(github.ref_name, '-macos-hotfix') }}
     needs: version
     runs-on: windows-2022
     env:
@@ -234,6 +237,7 @@ jobs:
 
   windows-arm64:
     name: Windows ARM64 (installer)
+    if: ${{ !endsWith(github.ref_name, '-linux-hotfix') && !endsWith(github.ref_name, '-macos-hotfix') }}
     needs: version
     runs-on: windows-11-arm
     env:
@@ -315,7 +319,7 @@ jobs:
   release:
     name: Publish release
     needs: [version, linux, macos, windows, windows-arm64]
-    if: needs.version.outputs.released == 'false'
+    if: ${{ !endsWith(github.ref_name, '-hotfix') && needs.version.outputs.released == 'false' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
